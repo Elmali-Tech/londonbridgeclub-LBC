@@ -1,0 +1,41 @@
+steps:
+  # Docker imajını inşa et
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/londonbridge-458912/london', '.']
+
+  # Docker imajını Container Registry'ye gönder
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/londonbridge-458912/london']
+
+  # Cloud Run'a dağıt
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'london'
+      - '--image'
+      - 'gcr.io/londonbridge-458912/london'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--set-env-vars'
+      - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL},NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY},STRIPE_SECRET_KEY=${_STRIPE_SECRET_KEY},NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY},STRIPE_WEBHOOK_SECRET=${_STRIPE_WEBHOOK_SECRET}'
+
+images:
+  - 'gcr.io/londonbridge-458912/london'
+
+substitutions:
+  _NEXT_PUBLIC_SUPABASE_URL: ''
+  _NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+  _STRIPE_SECRET_KEY: ''
+  _NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ''
+  _STRIPE_WEBHOOK_SECRET: '' 
