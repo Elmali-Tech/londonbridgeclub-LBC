@@ -1,13 +1,13 @@
 steps:
-  # Docker imajını inşa et
+  # 1. Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/londonbridge-458912/london', '.']
+    args: ['build', '-t', 'gcr.io/londonbridge-lbc/london', '.']
 
-  # Docker imajını Container Registry'ye gönder
+  # 2. Push the image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/londonbridge-458912/london']
+    args: ['push', 'gcr.io/londonbridge-lbc/london']
 
-  # Cloud Run'a dağıt
+  # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -15,27 +15,33 @@ steps:
       - 'deploy'
       - 'london'
       - '--image'
-      - 'gcr.io/londonbridge-458912/london'
+      - 'gcr.io/londonbridge-lbc/london'
       - '--region'
       - 'europe-west1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-      - '--memory'
-      - '512Mi'
-      - '--min-instances'
-      - '0'
-      - '--max-instances'
-      - '10'
       - '--set-env-vars'
-      - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL},NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY},STRIPE_SECRET_KEY=${_STRIPE_SECRET_KEY},NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY},STRIPE_WEBHOOK_SECRET=${_STRIPE_WEBHOOK_SECRET}'
+      - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL},NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY},STRIPE_SECRET_KEY=${_STRIPE_SECRET_KEY},NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY},STRIPE_WEBHOOK_SECRET=${_STRIPE_WEBHOOK_SECRET},NEXT_PUBLIC_BASE_URL=${_NEXT_PUBLIC_BASE_URL},NEXT_PUBLIC_STRIPE_INDIVIDUAL_PRICE_ID=${_NEXT_PUBLIC_STRIPE_INDIVIDUAL_PRICE_ID},NEXT_PUBLIC_STRIPE_INDIVIDUAL_YEARLY_PRICE_ID=${_NEXT_PUBLIC_STRIPE_INDIVIDUAL_YEARLY_PRICE_ID},NEXT_PUBLIC_STRIPE_CORPORATE_PRICE_ID=${_NEXT_PUBLIC_STRIPE_CORPORATE_PRICE_ID},NEXT_PUBLIC_STRIPE_CORPORATE_YEARLY_PRICE_ID=${_NEXT_PUBLIC_STRIPE_CORPORATE_YEARLY_PRICE_ID},NEXT_PUBLIC_AWS_REGION=${_NEXT_PUBLIC_AWS_REGION},AWS_ACCESS_KEY_ID=${_AWS_ACCESS_KEY_ID},AWS_SECRET_ACCESS_KEY=${_AWS_SECRET_ACCESS_KEY},NEXT_PUBLIC_AWS_S3_BUCKET_NAME=${_NEXT_PUBLIC_AWS_S3_BUCKET_NAME},GMAIL_EMAIL=${_GMAIL_EMAIL},GMAIL_APP_PASSWORD=${_GMAIL_APP_PASSWORD},RESET_PASSWORD_SECRET=${_RESET_PASSWORD_SECRET}'
 
 images:
-  - 'gcr.io/londonbridge-458912/london'
+  - 'gcr.io/londonbridge-lbc/london'
 
 substitutions:
   _NEXT_PUBLIC_SUPABASE_URL: ''
   _NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
   _STRIPE_SECRET_KEY: ''
   _NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ''
-  _STRIPE_WEBHOOK_SECRET: '' 
+  _STRIPE_WEBHOOK_SECRET: ''
+  _NEXT_PUBLIC_BASE_URL: ''
+  _NEXT_PUBLIC_STRIPE_INDIVIDUAL_PRICE_ID: ''
+  _NEXT_PUBLIC_STRIPE_INDIVIDUAL_YEARLY_PRICE_ID: ''
+  _NEXT_PUBLIC_STRIPE_CORPORATE_PRICE_ID: ''
+  _NEXT_PUBLIC_STRIPE_CORPORATE_YEARLY_PRICE_ID: ''
+  _NEXT_PUBLIC_AWS_REGION: ''
+  _AWS_ACCESS_KEY_ID: ''
+  _AWS_SECRET_ACCESS_KEY: ''
+  _NEXT_PUBLIC_AWS_S3_BUCKET_NAME: ''
+  _GMAIL_EMAIL: ''
+  _GMAIL_APP_PASSWORD: ''
+  _RESET_PASSWORD_SECRET: ''
