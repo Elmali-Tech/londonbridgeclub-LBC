@@ -45,3 +45,6 @@ substitutions:
   _GMAIL_EMAIL: ''
   _GMAIL_APP_PASSWORD: ''
   _RESET_PASSWORD_SECRET: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY
