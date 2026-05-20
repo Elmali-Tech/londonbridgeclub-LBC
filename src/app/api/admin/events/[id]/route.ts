@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { validateSession } from '@/lib/auth';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 export async function PUT(
   request: NextRequest,
@@ -39,13 +31,14 @@ export async function PUT(
     if (imageFile && imageFile.size > 0) {
       const ext = imageFile.name.split('.').pop();
       const fileName = `events/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadParams = {
-        Bucket: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt',
-        Key: fileName,
-        Body: Buffer.from(await imageFile.arrayBuffer()),
-        ContentType: imageFile.type,
-      };
-      await s3Client.send(new PutObjectCommand(uploadParams));
+      const uploadResult = await uploadBufferToSupabaseStorage(
+        fileName,
+        Buffer.from(await imageFile.arrayBuffer()),
+        imageFile.type
+      );
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+      }
       updates.image_key = fileName;
     }
 

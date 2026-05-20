@@ -7,6 +7,7 @@ import CommentSection from './CommentSection';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 // Type definitions for Post and media
 interface PostMedia {
@@ -94,7 +95,7 @@ export default function PostCard({ post, onCommentAdded, onLike, onDelete }: Pos
     if (post.author?.profile_image_key) {
       return (
         <Image
-          src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${post.author.profile_image_key}`}
+          src={getAssetPublicUrl(post.author.profile_image_key)}
           alt={post.author.full_name}
           fill
           className="object-cover"
@@ -379,7 +380,7 @@ export default function PostCard({ post, onCommentAdded, onLike, onDelete }: Pos
               <div className="relative w-full h-auto">
                 {post.media[0] && (
                   <Image
-                    src={`https://${post.media[0].s3_bucket_name}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${post.media[0].s3_key}`}
+                    src={getAssetPublicUrl(post.media[0].s3_key)}
                     alt="Post media"
                     width={600}
                     height={400}
@@ -398,7 +399,7 @@ export default function PostCard({ post, onCommentAdded, onLike, onDelete }: Pos
                 >
                   <div className="relative aspect-square overflow-hidden">
                   <Image
-                    src={`https://${media.s3_bucket_name}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${media.s3_key}`}
+                    src={getAssetPublicUrl(media.s3_key)}
                       alt={`Post media ${index + 1}`}
                     fill
                       className="object-cover"
@@ -512,7 +513,7 @@ export default function PostCard({ post, onCommentAdded, onLike, onDelete }: Pos
             
             {post.media && post.media[currentImageIndex] && (
               <Image
-                src={`https://${post.media[currentImageIndex].s3_bucket_name}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${post.media[currentImageIndex].s3_key}`}
+                src={getAssetPublicUrl(post.media[currentImageIndex].s3_key)}
                 alt={`Post media ${currentImageIndex + 1}`}
                 width={800}
                 height={600}

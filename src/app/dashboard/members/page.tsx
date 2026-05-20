@@ -10,6 +10,7 @@ import {
 import DashboardContainer from "@/app/components/dashboard/DashboardContainer";
 import { toast } from "react-hot-toast";
 import { FiPlus } from "react-icons/fi";
+import { getAssetPublicUrl } from "@/lib/storage";
 
 // Extended User interface for follow status
 interface UserWithFollowStatus extends User {
@@ -449,7 +450,7 @@ export default function MembersPage() {
                       <div className="w-24 h-24 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
                         {member.profile_image_key ? (
                           <img
-                            src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${member.profile_image_key}`}
+                            src={getAssetPublicUrl(member.profile_image_key)}
                             alt={member.full_name}
                             className="w-full h-full object-cover"
                           />
@@ -542,13 +543,7 @@ export default function MembersPage() {
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold overflow-hidden flex-shrink-0">
                             {member.profile_image_key ? (
                               <img
-                                src={`https://${
-                                  process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME ||
-                                  "londonbridgeprojt"
-                                }.s3.${
-                                  process.env.NEXT_PUBLIC_AWS_REGION ||
-                                  "eu-west-1"
-                                }.amazonaws.com/${member.profile_image_key}`}
+                                src={getAssetPublicUrl(member.profile_image_key)}
                                 alt={member.full_name}
                                 className="object-cover w-full h-full"
                               />

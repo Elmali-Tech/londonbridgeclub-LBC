@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getS3PublicUrl } from '@/lib/awsConfig';
+import { getAssetPublicUrl } from '@/lib/storage';
 import { MdWorkOutline, MdCardGiftcard, MdArrowForward } from 'react-icons/md';
 import Cookies from 'js-cookie';
 
@@ -316,7 +317,7 @@ export default function RightSidebar() {
               <div className="relative h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
                 {user.profile_image_key ? (
                   <Image
-                    src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                    src={getAssetPublicUrl(user.profile_image_key)}
                     alt={user.full_name}
                     fill
                     className="object-cover"

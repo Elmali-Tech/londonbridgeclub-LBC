@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Partner } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 export default function PartnersPage() {
   const { user } = useAuth();
@@ -12,6 +13,8 @@ export default function PartnersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'grid'>('grid');
+  const getPartnerLogoUrl = (logoKey?: string | null) =>
+    logoKey ? getAssetPublicUrl(logoKey) : '';
 
   useEffect(() => {
     fetchPartners();
@@ -155,7 +158,7 @@ export default function PartnersPage() {
                       <div className="w-24 h-24 rounded-xl overflow-hidden flex items-center justify-center mb-5 border border-gray-100 bg-gray-50/50 shadow-sm flex-shrink-0 relative">
                       {partner.logo_key ? (
                         <img
-                          src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com`}/${partner.logo_key}`}
+                          src={getPartnerLogoUrl(partner.logo_key)}
                           alt={partner.name}
                           className="max-w-[85%] max-h-[85%] object-contain"
                         />
@@ -197,7 +200,7 @@ export default function PartnersPage() {
                       <div className="w-28 h-28 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-100 bg-gray-50/50 shadow-sm relative">
                         {partner.logo_key ? (
                           <img
-                            src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com`}/${partner.logo_key}`}
+                            src={getPartnerLogoUrl(partner.logo_key)}
                             alt={partner.name}
                             className="max-w-[85%] max-h-[85%] object-contain"
                           />

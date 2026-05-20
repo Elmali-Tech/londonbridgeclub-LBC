@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { validateSession } from '@/lib/auth';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 interface Opportunity {
   id: number;
@@ -13,22 +13,16 @@ interface Opportunity {
   description: string;
   image_key: string | null;
   is_active: boolean;
+  customer_opportunity_id: number | null;
   created_at: string;
 }
-
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
 
 export async function GET(request: Request) {
   try {
     const supabase = createClient();
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
+    const includeInactive = url.searchParams.get('includeInactive') === '1';
     if (id) {
       const { data, error } = await supabase
         .from('opportunities')
@@ -40,16 +34,32 @@ export async function GET(request: Request) {
       }
       return NextResponse.json({ success: true, opportunity: data });
     }
-    const { data: opportunities, error } = await supabase
+    if (includeInactive) {
+      const session = await validateSession(request);
+      const canManage =
+        session?.is_admin ||
+        session?.role === 'admin' ||
+        session?.role === 'opportunity_manager';
+      if (!canManage) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
+    let query = supabase
       .from('opportunities')
       .select('*')
-      .eq('is_active', true)
       .order('created_at', { ascending: false });
+
+    if (!includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    const { data: opportunities, error } = await query;
     if (error) {
       return NextResponse.json({ success: false, error: 'Failed to fetch opportunities' }, { status: 500 });
     }
     return NextResponse.json({ success: true, opportunities: opportunities as Opportunity[] });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -70,6 +80,10 @@ export async function POST(request: Request) {
     const estimated_budget = formData.get('estimated_budget') as string;
     const description = formData.get('description') as string;
     const imageFile = formData.get('image') as File | null;
+    const customerOpportunityIdRaw = formData.get('customer_opportunity_id') as string | null;
+    const customer_opportunity_id = customerOpportunityIdRaw
+      ? Number(customerOpportunityIdRaw)
+      : null;
 
     if (!title || !company || !service_detail || !category || !estimated_budget) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -84,13 +98,14 @@ export async function POST(request: Request) {
       // Generate unique file name
       const ext = imageFile.name.split('.').pop();
       const fileName = `opportunities/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadParams = {
-        Bucket: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt',
-        Key: fileName,
-        Body: Buffer.from(await imageFile.arrayBuffer()),
-        ContentType: imageFile.type,
-      };
-      await s3Client.send(new PutObjectCommand(uploadParams));
+      const uploadResult = await uploadBufferToSupabaseStorage(
+        fileName,
+        Buffer.from(await imageFile.arrayBuffer()),
+        imageFile.type
+      );
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+      }
       image_key = fileName;
     }
 
@@ -107,6 +122,9 @@ export async function POST(request: Request) {
           description,
           image_key,
           is_active: true,
+          customer_opportunity_id: Number.isInteger(customer_opportunity_id)
+            ? customer_opportunity_id
+            : null,
           created_at: new Date().toISOString(),
         },
       ])
@@ -115,7 +133,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Failed to create opportunity' }, { status: 500 });
     }
     return NextResponse.json({ success: true, opportunity: data[0] });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
-} 
+}

@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 import { validateSession } from "@/lib/auth";
 
+const normalizeDealStage = (stage?: string | null) => {
+  if (!stage || stage === "Prospect") return "Lead";
+  if (stage === "Opportunity") return "Qualified";
+  return stage;
+};
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -42,6 +48,9 @@ export async function PUT(
     if (body.expected_closing_date === "") {
       body.expected_closing_date = null;
     }
+    if (body.deal_stage) {
+      body.deal_stage = normalizeDealStage(body.deal_stage);
+    }
 
     const { data, error } = await supabase
       .from("customer_opportunities")
@@ -74,7 +83,7 @@ export async function PUT(
     try {
       const { sendSystemNotification } = await import("@/lib/nodemailer");
       await sendSystemNotification("Opportunity Updated", `
-        An opportunity has been modified in the Customer Pool:
+        An opportunity has been modified in the CRM Pipeline:
         - ID: ${id}
         - Client: ${data[0].customer_name}
         - Company: ${data[0].company_name}
@@ -143,7 +152,7 @@ export async function DELETE(
     try {
       const { sendSystemNotification } = await import("@/lib/nodemailer");
       await sendSystemNotification("Opportunity Deleted", `
-        An opportunity has been removed from the Customer Pool:
+        An opportunity has been removed from the CRM Pipeline:
         - Opportunity ID: ${id}
         - Deleted By: ${session.id}
       `);

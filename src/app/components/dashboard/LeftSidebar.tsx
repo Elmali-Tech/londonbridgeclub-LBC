@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { User } from '@/types/database';
 import { HiCake, HiSparkles } from 'react-icons/hi';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface LeftSidebarProps {
   user: User | null;
@@ -65,7 +66,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
           <div className="relative w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-sm mx-auto">
             {user?.profile_image_key ? (
               <Image
-                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                src={getAssetPublicUrl(user.profile_image_key)}
                 alt={user.full_name || 'User'}
                 fill
                 className="object-cover"
@@ -114,7 +115,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
                   <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-pink-200">
                     {birthdayUser.profile_image_key ? (
                       <Image
-                        src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${birthdayUser.profile_image_key}`}
+                        src={getAssetPublicUrl(birthdayUser.profile_image_key)}
                         alt={birthdayUser.full_name}
                         fill
                         className="object-cover"
@@ -169,7 +170,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
                     <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
                       {recentUser.profile_image_key ? (
                         <Image
-                          src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${recentUser.profile_image_key}`}
+                          src={getAssetPublicUrl(recentUser.profile_image_key)}
                           alt={recentUser.full_name}
                           fill
                           className="object-cover"

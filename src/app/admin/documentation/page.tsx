@@ -28,8 +28,8 @@ const STAGES = [
     desc: "Initial contact or interest identified.",
   },
   {
-    id: "opportunity",
-    title: "Opportunity",
+    id: "qualified",
+    title: "Qualified",
     icon: FiZap,
     color: "text-amber-500",
     bg: "bg-amber-500/10",
@@ -179,7 +179,7 @@ export default function DocumentationPage() {
                       },
                       {
                         num: "02",
-                        name: "Opportunity Analysis",
+                        name: "Qualification Analysis",
                         goal: "Define scope & value",
                         role: "Account Manager",
                       },

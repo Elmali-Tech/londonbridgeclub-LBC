@@ -220,6 +220,30 @@ p {
   animation: fadeInDown 0.2s ease-out forwards;
 }
 
+@keyframes partnerMarquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.partner-marquee-track {
+  animation: partnerMarquee 28s linear infinite;
+}
+
+.partner-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partner-marquee-track {
+    animation: none;
+    transform: translateX(0);
+  }
+}
+
 /* ImageUpload component styles */
 .banner-upload-wrapper button {
   @apply px-3 py-2 bg-white/90 hover:bg-white text-gray-700 rounded-md text-sm font-medium border border-gray-300 transition-colors;

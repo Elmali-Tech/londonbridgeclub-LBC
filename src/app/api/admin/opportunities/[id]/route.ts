@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateSession } from "@/lib/auth";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { uploadBufferToSupabaseStorage } from "@/lib/storageUploadUtils";
 
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-  },
-});
+type OpportunityUpdateData = {
+  title: string;
+  company: string;
+  service_detail: string;
+  category: string;
+  estimated_budget: string;
+  description: string | null;
+  is_active: boolean;
+  customer_opportunity_id: number | null;
+  image_key?: string;
+};
 
 export async function PUT(
   request: Request,
@@ -45,6 +49,12 @@ export async function PUT(
     const is_active_str = formData.get("is_active") as string | null;
     const is_active = is_active_str === "true";
     const imageFile = formData.get("image") as File | null;
+    const customerOpportunityIdRaw = formData.get(
+      "customer_opportunity_id",
+    ) as string | null;
+    const customer_opportunity_id = customerOpportunityIdRaw
+      ? Number(customerOpportunityIdRaw)
+      : null;
 
     if (
       !title ||
@@ -71,20 +81,20 @@ export async function PUT(
       // Generate unique file name
       const ext = imageFile.name.split(".").pop();
       const fileName = `opportunities/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadParams = {
-        Bucket:
-          process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt",
-        Key: fileName,
-        Body: Buffer.from(await imageFile.arrayBuffer()),
-        ContentType: imageFile.type,
-      };
-      await s3Client.send(new PutObjectCommand(uploadParams));
+      const uploadResult = await uploadBufferToSupabaseStorage(
+        fileName,
+        Buffer.from(await imageFile.arrayBuffer()),
+        imageFile.type,
+      );
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || "Supabase Storage upload failed");
+      }
       image_key = fileName;
     }
 
     const supabase = createClient();
 
-    const updateData: any = {
+    const updateData: OpportunityUpdateData = {
       title,
       company,
       service_detail,
@@ -92,6 +102,9 @@ export async function PUT(
       estimated_budget,
       description,
       is_active,
+      customer_opportunity_id: Number.isInteger(customer_opportunity_id)
+        ? customer_opportunity_id
+        : null,
     };
 
     if (image_key) {

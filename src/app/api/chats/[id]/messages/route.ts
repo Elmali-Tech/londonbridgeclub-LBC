@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
 import { createClient } from '@/lib/supabase';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-
-// Initialize S3 client
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 // GET - Sohbetteki mesajları getir
 export async function GET(
@@ -180,21 +171,22 @@ export async function POST(
       const file = formData.get('file') as File | null;
       if (file) {
         try {
-          // Dosyayı S3'e yükle
+          // Dosyayı Supabase Storage'a yükle
           const timestamp = Date.now();
           const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
           const s3Key = `chat-files/${chatId}/${user.id}/${timestamp}_${sanitizedFileName}`;
           
           const buffer = Buffer.from(await file.arrayBuffer());
-          
-          const uploadCommand = new PutObjectCommand({
-            Bucket: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeproject',
-            Key: s3Key,
-            Body: buffer,
-            ContentType: file.type,
-          });
-          
-          await s3Client.send(uploadCommand);
+
+          const uploadResult = await uploadBufferToSupabaseStorage(
+            s3Key,
+            buffer,
+            file.type
+          );
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+          }
           
           fileKey = s3Key;
           fileName = file.name;

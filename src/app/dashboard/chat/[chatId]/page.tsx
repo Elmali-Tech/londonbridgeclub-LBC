@@ -8,6 +8,7 @@ import { Message } from '@/types/messaging';
 import Image from 'next/image';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 import { toast } from 'react-hot-toast';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 export default function ChatPage() {
   const router = useRouter();
@@ -289,7 +290,7 @@ export default function ChatPage() {
                     </div>
                   ) : otherParticipant?.user?.profile_image_key ? (
                     <Image
-                      src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${otherParticipant.user.profile_image_key}`}
+                      src={getAssetPublicUrl(otherParticipant.user.profile_image_key)}
                       alt={displayName}
                       width={40}
                       height={40}
@@ -349,7 +350,7 @@ export default function ChatPage() {
                       <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-r from-amber-400 to-amber-600 flex-shrink-0">
                         {message.sender?.profile_image_key ? (
                           <Image
-                            src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${message.sender.profile_image_key}`}
+                            src={getAssetPublicUrl(message.sender.profile_image_key)}
                             alt={message.sender?.full_name || 'User'}
                             width={32}
                             height={32}
@@ -385,7 +386,7 @@ export default function ChatPage() {
                           <div className="mb-2">
                             {message.message_type === 'image' ? (
                               <Image
-                                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeproject'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${message.file_key}`}
+                                src={getAssetPublicUrl(message.file_key)}
                                 alt={message.file_name || 'Image'}
                                 width={200}
                                 height={200}

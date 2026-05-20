@@ -7,6 +7,7 @@ import { useMessaging } from '@/hooks/useMessaging';
 import Image from 'next/image';
 import Link from 'next/link';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 // Memoized chat item component
 const ChatItem = React.memo(({ 
@@ -28,12 +29,12 @@ const ChatItem = React.memo(({
     : otherParticipant?.user?.full_name || 'Unknown User';
   const lastMessageTime = chat.last_message_at ? formatTime(chat.last_message_at) : '';
 
-  // Memoize S3 URL to prevent recalculation
+  // Memoize asset URL to prevent recalculation
   const profileImageUrl = useMemo(() => {
     if (chat.type === 'group' || !otherParticipant?.user?.profile_image_key) {
       return null;
     }
-    return `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${otherParticipant.user.profile_image_key}`;
+    return getAssetPublicUrl(otherParticipant.user.profile_image_key);
   }, [chat.type, otherParticipant?.user?.profile_image_key]);
 
   return (

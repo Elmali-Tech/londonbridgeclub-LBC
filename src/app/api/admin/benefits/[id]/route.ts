@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { validateSession } from '@/lib/auth';
-import { S3Client, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
+import { deleteFileFromS3 } from '@/lib/s3UploadUtils';
+import {
+  deleteFileFromSupabaseStorage,
+  uploadBufferToSupabaseStorage,
+} from '@/lib/storageUploadUtils';
 
-// Initialize S3 client
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const canAttemptLegacyS3Delete = () =>
+  Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
 
 // GET - Get specific benefit
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -112,13 +110,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       // Delete old image if exists
       if (existingBenefit.image_key) {
-        try {
-          await s3Client.send(new DeleteObjectCommand({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key: existingBenefit.image_key,
-          }));
-        } catch (deleteError) {
-          console.error('Error deleting old image:', deleteError);
+        await deleteFileFromSupabaseStorage(existingBenefit.image_key);
+        if (canAttemptLegacyS3Delete()) {
+          await deleteFileFromS3(existingBenefit.image_key);
         }
       }
 
@@ -127,15 +121,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const fileName = `benefits/${uuidv4()}.${fileExtension}`;
       imageKey = fileName;
 
-      // Upload to S3
-      const uploadParams = {
-        Bucket: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt',
-        Key: fileName,
-        Body: Buffer.from(await imageFile.arrayBuffer()),
-        ContentType: imageFile.type
-      };
+      const uploadResult = await uploadBufferToSupabaseStorage(
+        fileName,
+        Buffer.from(await imageFile.arrayBuffer()),
+        imageFile.type
+      );
 
-      await s3Client.send(new PutObjectCommand(uploadParams));
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+      }
     }
 
     // Update benefit in database
@@ -201,15 +195,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'Benefit not found' }, { status: 404 });
     }
 
-    // Delete image from S3 if exists
+    // Delete image from storage if exists
     if (benefit.image_key) {
-      try {
-        await s3Client.send(new DeleteObjectCommand({
-          Bucket: process.env.AWS_S3_BUCKET_NAME,
-          Key: benefit.image_key,
-        }));
-      } catch (deleteError) {
-        console.error('Error deleting image from S3:', deleteError);
+      await deleteFileFromSupabaseStorage(benefit.image_key);
+      if (canAttemptLegacyS3Delete()) {
+        await deleteFileFromS3(benefit.image_key);
       }
     }
 

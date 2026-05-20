@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { User } from '@/types/database';
 import CreatePostModal from './CreatePostModal';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface CreatePostCardProps {
   user: User | null;
@@ -27,7 +28,7 @@ export default function CreatePostCard({ user }: CreatePostCardProps) {
           <div className="relative w-12 h-12 rounded-full overflow-hidden border border-gray-300">
             {user?.profile_image_key ? (
               <Image
-                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                src={getAssetPublicUrl(user.profile_image_key)}
                 alt={user.full_name || 'User'}
                 fill
                 className="object-cover"

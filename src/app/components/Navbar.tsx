@@ -9,12 +9,24 @@ import { useRouter } from 'next/navigation';
 interface NavbarProps {
   currentPage?: 'login' | 'register' | 'default';
   showAuth?: boolean;
+  variant?: 'light' | 'transparent';
 }
 
-export default function Navbar({ currentPage = 'default', showAuth = true }: NavbarProps) {
+export default function Navbar({ currentPage = 'default', showAuth = true, variant = 'light' }: NavbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const router = useRouter();
+  const isTransparent = variant === 'transparent';
+
+  const navTextClass = isTransparent
+    ? 'text-white hover:text-[#e7c36a]'
+    : 'text-black hover:text-gray-600';
+  const secondaryButtonClass = isTransparent
+    ? 'text-white hover:text-[#e7c36a]'
+    : 'text-black hover:text-gray-600';
+  const primaryButtonClass = isTransparent
+    ? 'border border-[#d8b861]/70 bg-[#d8b861] text-black hover:bg-[#f0d27b]'
+    : 'bg-orange-300 text-black hover:bg-orange-400';
 
   // Close mobile menu when clicking outside
   useEffect(() => {
@@ -42,13 +54,17 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
         <div className="flex items-center space-x-4">
           <Link 
             href="/dashboard" 
-            className="text-black hover:text-gray-600 transition-colors text-sm font-medium"
+            className={`${secondaryButtonClass} transition-colors text-sm font-medium`}
           >
             Dashboard
           </Link>
           <button
             onClick={handleLogout}
-            className="bg-gray-200 text-black px-4 py-2 text-sm font-medium hover:bg-gray-300 transition-colors rounded"
+            className={`px-4 py-2 text-sm font-medium transition-colors rounded ${
+              isTransparent
+                ? 'border border-white/20 bg-white/10 text-white hover:bg-white/20'
+                : 'bg-gray-200 text-black hover:bg-gray-300'
+            }`}
           >
             Logout
           </button>
@@ -64,7 +80,7 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
           <div className="flex items-center gap-4">
             <Link 
               href="/login" 
-              className="text-black hover:text-gray-600 transition-colors text-sm font-medium"
+              className={`${secondaryButtonClass} transition-colors text-sm font-medium`}
             >
               Login
             </Link>
@@ -75,15 +91,15 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
           <div className="flex items-center gap-4">
             <Link 
               href="/register" 
-              className="text-black hover:text-gray-600 transition-colors text-sm font-medium"
+              className={`${secondaryButtonClass} transition-colors text-sm font-medium`}
             >
-              Register
+              {isTransparent ? 'Apply for membership' : 'Register'}
             </Link>
             <Link 
               href="/login" 
-              className="bg-orange-300 text-black px-6 py-2 text-sm font-medium hover:bg-orange-400 transition-colors rounded"
+              className={`${primaryButtonClass} px-5 py-2 text-sm font-medium transition-colors rounded`}
             >
-              Login
+              {isTransparent ? 'Sign in' : 'Login'}
             </Link>
           </div>
         );
@@ -99,32 +115,38 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
   return (
     <>
       {/* Navigation Bar */}
-      <div className="bg-white shadow-sm sticky top-0 z-50">
+      <div
+        className={`sticky top-0 z-50 transition-colors ${
+          isTransparent
+            ? 'border-b border-white/10 bg-[#080806]/35 text-white backdrop-blur-md'
+            : 'bg-white text-black shadow-sm'
+        }`}
+      >
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
                 <Link href="/" className="flex items-center">
                   <Image
-                    src="/lbllogo.png" 
+                    src="/lbllogo.png"
                     alt="LBC Logo"
-                    width={80} 
+                    width={40}
                     height={40}
-                    className="h-10 w-auto hover:opacity-80 transition-opacity"
+                    className="h-10 w-10 object-contain hover:opacity-80 transition-opacity"
                   />
                 </Link>
               </div>
               
               {/* Desktop Navigation */}
-              <nav className="hidden md:flex items-center space-x-8 text-black text-sm font-medium">
+              <nav className="hidden md:flex items-center space-x-8 text-sm font-medium">
                 {navigationLinks.map((link) => (
                   <Link 
                     key={link.href}
                     href={link.href} 
-                    className="hover:text-gray-600 transition-colors relative group"
+                    className={`${navTextClass} transition-colors relative group`}
                   >
                     {link.label}
-                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-orange-300 transition-all duration-300 group-hover:w-full"></span>
+                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#d8b861] transition-all duration-300 group-hover:w-full"></span>
                   </Link>
                 ))}
               </nav>
@@ -139,7 +161,9 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
               
               {/* Mobile Menu Button */}
               <button
-                className="mobile-menu-button md:hidden p-2 rounded-md text-black hover:bg-gray-100 transition-colors"
+                className={`mobile-menu-button md:hidden p-2 rounded-md transition-colors ${
+                  isTransparent ? 'text-white hover:bg-white/10' : 'text-black hover:bg-gray-100'
+                }`}
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,13 +179,21 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
           
           {/* Mobile Menu */}
           {isMobileMenuOpen && (
-            <div className="mobile-menu md:hidden border-t border-gray-200 bg-white">
+            <div
+              className={`mobile-menu md:hidden border-t ${
+                isTransparent
+                  ? 'border-white/10 bg-[#080806]/95 text-white'
+                  : 'border-gray-200 bg-white text-black'
+              }`}
+            >
               <div className="px-2 pt-2 pb-3 space-y-1">
                 {navigationLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="block px-3 py-2 text-black hover:bg-gray-100 transition-colors font-medium"
+                    className={`block px-3 py-2 transition-colors font-medium ${
+                      isTransparent ? 'text-white hover:bg-white/10' : 'text-black hover:bg-gray-100'
+                    }`}
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     {link.label}
@@ -170,13 +202,13 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
                 
                 {/* Mobile Phone Numbers */}
                 <div className="px-3 py-2 space-y-2">
-                  <div className="flex items-center space-x-2 text-black">
+                  <div className={`flex items-center space-x-2 ${isTransparent ? 'text-white/80' : 'text-black'}`}>
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
                     </svg>
                     <span className="text-sm font-medium">+90 505 404 4488</span>
                   </div>
-                  <div className="flex items-center space-x-2 text-black">
+                  <div className={`flex items-center space-x-2 ${isTransparent ? 'text-white/80' : 'text-black'}`}>
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
                     </svg>
@@ -191,7 +223,11 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
                       <>
                         <Link
                           href="/dashboard"
-                          className="block w-full text-center px-4 py-2 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
+                          className={`block w-full text-center px-4 py-2 rounded transition-colors ${
+                            isTransparent
+                              ? 'border border-white/15 bg-white/10 text-white hover:bg-white/20'
+                              : 'bg-gray-100 text-black hover:bg-gray-200'
+                          }`}
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           Dashboard
@@ -201,15 +237,36 @@ export default function Navbar({ currentPage = 'default', showAuth = true }: Nav
                             handleLogout();
                             setIsMobileMenuOpen(false);
                           }}
-                          className="block w-full text-center px-4 py-2 bg-gray-200 text-black rounded hover:bg-gray-300 transition-colors"
+                          className={`block w-full text-center px-4 py-2 rounded transition-colors ${
+                            isTransparent
+                              ? 'border border-white/15 bg-white/10 text-white hover:bg-white/20'
+                              : 'bg-gray-200 text-black hover:bg-gray-300'
+                          }`}
                         >
                           Logout
                         </button>
                       </>
+                    ) : isTransparent ? (
+                      <>
+                        <Link
+                          href="/register"
+                          className="block w-full rounded border border-[#d8b861]/70 bg-[#d8b861] px-4 py-2 text-center text-black transition-colors hover:bg-[#f0d27b]"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Apply for membership
+                        </Link>
+                        <Link
+                          href="/login"
+                          className="block w-full rounded border border-white/20 px-4 py-2 text-center text-white transition-colors hover:bg-white/10"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Sign in
+                        </Link>
+                      </>
                     ) : (
                       <Link
                         href="/login"
-                        className="block w-full text-center px-4 py-2 border border-orange-300 text-black rounded hover:bg-gray-50 transition-colors"
+                        className="block w-full rounded border border-orange-300 px-4 py-2 text-center text-black transition-colors hover:bg-gray-50"
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
                         Login

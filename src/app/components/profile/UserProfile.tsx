@@ -1,6 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface UserStats {
   followers: number;
@@ -104,7 +105,7 @@ export default function UserProfile({
           {banner_image_key && (
             <div className="h-full w-full">
               <Image
-                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${banner_image_key}`}
+                src={getAssetPublicUrl(banner_image_key)}
                 alt={`${full_name}'s banner`}
                 fill
                 className="object-cover"
@@ -121,7 +122,7 @@ export default function UserProfile({
               {profile_image_key ? (
                 <div className="relative w-full h-full">
                   <Image
-                    src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${profile_image_key}`}
+                    src={getAssetPublicUrl(profile_image_key)}
                     alt={full_name}
                     fill
                     className="object-cover"

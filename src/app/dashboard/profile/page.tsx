@@ -14,6 +14,7 @@ import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 import CreatePostModal from '@/app/components/dashboard/CreatePostModal';
 import { X, Plus, CheckCircle, ChevronDown } from 'lucide-react';
 import { HiPencil } from 'react-icons/hi';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 // Interface for user connection data
 interface ConnectionUser {
@@ -958,7 +959,7 @@ export default function ProfilePage() {
           <div className="relative h-48 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600">
             {user.banner_image_key ? (
               <Image
-                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.banner_image_key}`}
+                src={getAssetPublicUrl(user.banner_image_key)}
                 alt="Profile Banner"
                 fill
                 className="object-cover"
@@ -984,7 +985,7 @@ export default function ProfilePage() {
                 <div className="w-40 h-40 rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white relative">
                   {user.profile_image_key ? (
                     <Image
-                      src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                      src={getAssetPublicUrl(user.profile_image_key)}
                       alt={user.full_name || 'Profile'}
                       width={160}
                       height={160}
@@ -1334,7 +1335,7 @@ export default function ProfilePage() {
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold">
                             {follower.profile_image_key ? (
                               <Image 
-                                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${follower.profile_image_key}`}
+                                src={getAssetPublicUrl(follower.profile_image_key)}
                                 alt={follower.full_name}
                                 width={40}
                                 height={40}
@@ -1401,7 +1402,7 @@ export default function ProfilePage() {
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold">
                             {followedUser.profile_image_key ? (
                               <Image 
-                                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${followedUser.profile_image_key}`}
+                                src={getAssetPublicUrl(followedUser.profile_image_key)}
                                 alt={followedUser.full_name}
                                 width={40}
                                 height={40}

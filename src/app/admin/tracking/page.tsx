@@ -6,10 +6,9 @@ import { toast } from "react-hot-toast";
 import { supabase } from "@/lib/supabase";
 import { CustomerOpportunity } from "@/types/database";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAssetPublicUrl } from "@/lib/storage";
 import {
   FiSearch,
-  FiFilter,
-  FiUser,
   FiBriefcase,
   FiCalendar,
   FiActivity,
@@ -22,7 +21,7 @@ import {
 
 type Stage =
   | "Lead"
-  | "Opportunity"
+  | "Qualified"
   | "Proposal"
   | "Negotiation"
   | "Won"
@@ -30,18 +29,29 @@ type Stage =
 
 const STAGES: Stage[] = [
   "Lead",
-  "Opportunity",
+  "Qualified",
   "Proposal",
   "Negotiation",
   "Won",
   "Lost",
 ];
 
+const normalizeStageLabel = (stage?: string | null) => {
+  if (!stage || stage === "Prospect") return "Lead";
+  if (stage === "Opportunity") return "Qualified";
+  return stage;
+};
+
+type PartnerOption = {
+  name: string;
+  logo_key: string | null;
+};
+
 export default function TrackingPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [opportunities, setOpportunities] = useState<CustomerOpportunity[]>([]);
-  const [partners, setPartners] = useState<any[]>([]);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("All");
@@ -57,13 +67,14 @@ export default function TrackingPage() {
     }
     fetchOpportunities();
     fetchPartners();
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const fetchPartners = async () => {
     try {
       const { data, error } = await supabase
         .from('partners')
         .select('name, logo_key');
+      if (error) throw error;
       if (data) setPartners(data);
     } catch (error) {
       console.error('Error fetching partners:', error);
@@ -84,7 +95,7 @@ export default function TrackingPage() {
       } else {
         toast.error(data.error || "Failed to fetch opportunities");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch opportunities");
     } finally {
       setLoading(false);
@@ -104,18 +115,17 @@ export default function TrackingPage() {
   };
 
   const sortedAndFilteredOpportunities = useMemo(() => {
-    let result = opportunities.filter((opp) => {
+    const result = opportunities.filter((opp) => {
       const searchStr = searchTerm.toLowerCase();
       const matchesSearch =
         opp.customer_name.toLowerCase().includes(searchStr) ||
         opp.company_name.toLowerCase().includes(searchStr) ||
         opp.opportunity_title.toLowerCase().includes(searchStr) ||
-        opp.responsible_person?.toLowerCase().includes(searchStr) ||
-        "";
+        Boolean(opp.responsible_person?.toLowerCase().includes(searchStr));
 
       const matchesStage =
         stageFilter === "All" ||
-        opp.deal_stage === stageFilter ||
+        normalizeStageLabel(opp.deal_stage) === stageFilter ||
         (stageFilter === "Won" && opp.status === "Won") ||
         (stageFilter === "Lost" && opp.status === "Lost");
 
@@ -157,7 +167,7 @@ export default function TrackingPage() {
   const getPartnerLogo = (companyName: string) => {
     const partner = partners.find(p => p.name.toLowerCase() === companyName.toLowerCase());
     if (partner?.logo_key) {
-      return `${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com`}/${partner.logo_key}`;
+      return getAssetPublicUrl(partner.logo_key);
     }
     return null;
   };
@@ -370,11 +380,11 @@ export default function TrackingPage() {
                       </td>
                       <td className="px-8 py-6">
                         <span
-                          className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStageColor(opp.deal_stage || "Prospect", opp.status)}`}
+                          className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStageColor(normalizeStageLabel(opp.deal_stage), opp.status)}`}
                         >
                           {opp.status !== "Active"
                             ? opp.status
-                            : opp.deal_stage || "Prospect"}
+                            : normalizeStageLabel(opp.deal_stage)}
                         </span>
                       </td>
                       <td className="px-8 py-6 font-black text-amber-500 tracking-tighter">

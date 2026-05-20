@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 import { validateSession } from "@/lib/auth";
 
+const normalizeDealStage = (stage?: string | null) => {
+  if (!stage || stage === "Prospect") return "Lead";
+  if (stage === "Opportunity") return "Qualified";
+  return stage;
+};
+
 export async function GET(request: Request) {
   try {
     const session = await validateSession(request);
@@ -115,7 +121,7 @@ export async function POST(request: Request) {
           opportunity_title,
           opportunity_description: opportunity_description || null,
           estimated_deal_size: estimated_deal_size || null,
-          deal_stage: deal_stage || "Prospect",
+          deal_stage: normalizeDealStage(deal_stage),
           responsible_person: responsible_person || null,
           expected_closing_date: formattedDate,
           status: status || "Active",
@@ -138,7 +144,7 @@ export async function POST(request: Request) {
     try {
       const { sendSystemNotification } = await import("@/lib/nodemailer");
       await sendSystemNotification("New Opportunity Created", `
-        A new prospect has been added to the Customer Pool:
+        A new CRM lead has been added to the CRM Pipeline:
         - Client: ${customer_name}
         - Company: ${company_name}
         - Opportunity: ${opportunity_title}

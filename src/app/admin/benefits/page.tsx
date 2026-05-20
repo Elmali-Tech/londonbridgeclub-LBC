@@ -7,6 +7,7 @@ import Image from "next/image";
 import { toast } from "react-hot-toast";
 import { Benefit } from "@/types/database";
 import Cookies from "js-cookie";
+import { getAssetPublicUrl } from "@/lib/storage";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiGift, FiStar } from "react-icons/fi";
 
 export default function AdminBenefitsPage() {
@@ -166,9 +167,7 @@ export default function AdminBenefitsPage() {
     });
 
     if (benefit.image_key) {
-      setImagePreview(
-        `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com/${benefit.image_key}`
-      );
+      setImagePreview(getAssetPublicUrl(benefit.image_key));
     } else {
       setImagePreview(null);
     }
@@ -469,7 +468,7 @@ export default function AdminBenefitsPage() {
               <div className="relative h-48 w-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                 {benefit.image_key ? (
                   <div className="relative h-full w-full p-4 flex items-center justify-center">
-                    <Image src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com/${benefit.image_key}`} alt={benefit.title} fill className="object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
+                    <Image src={getAssetPublicUrl(benefit.image_key)} alt={benefit.title} fill className="object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10 dark:from-indigo-600/20 dark:to-purple-600/20">
@@ -566,7 +565,7 @@ export default function AdminBenefitsPage() {
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden relative flex-shrink-0 border border-gray-100 dark:border-gray-700 flex items-center justify-center p-1">
                           {benefit.image_key ? (
-                            <Image src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com/${benefit.image_key}`} alt={benefit.title} fill className="object-contain p-1" />
+                            <Image src={getAssetPublicUrl(benefit.image_key)} alt={benefit.title} fill className="object-contain p-1" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-indigo-500/5">
                               <FiGift className="w-5 h-5 text-indigo-500/50 dark:text-indigo-400/50" />

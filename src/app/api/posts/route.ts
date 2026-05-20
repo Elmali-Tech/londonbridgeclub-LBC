@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-
-// Initialize S3 client
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+import { storageBucketName } from '@/lib/storage';
+import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 // POST API for creating a new post
 export async function POST(request: NextRequest) {
@@ -55,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload files to S3 if any
+    // Upload files to Supabase Storage if any
     if (uploadedFiles.length > 0) {
       for (const file of uploadedFiles) {
         try {
@@ -66,19 +58,20 @@ export async function POST(request: NextRequest) {
           
           // Convert file to buffer
           const buffer = Buffer.from(await file.arrayBuffer());
-          
-          // Upload to S3
-          const uploadCommand = new PutObjectCommand({
-            Bucket: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt',
-            Key: s3Key,
-            Body: buffer,
-            ContentType: file.type,
-          });
-          
-          await s3Client.send(uploadCommand);
+
+          const uploadResult = await uploadBufferToSupabaseStorage(
+            s3Key,
+            buffer,
+            file.type
+          );
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+          }
+
           mediaKeys.push(s3Key);
         } catch (uploadError) {
-          console.error('Error uploading file to S3:', uploadError);
+          console.error('Error uploading file to Supabase Storage:', uploadError);
           return NextResponse.json(
             { success: false, error: 'Dosya yükleme başarısız oldu' },
             { status: 500 }
@@ -125,7 +118,7 @@ export async function POST(request: NextRequest) {
         return {
           post_id: post.id,
           media_type: mediaType,
-          s3_bucket_name: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt',
+          s3_bucket_name: storageBucketName,
           s3_key: key,
           media_original_name: file.name,
           media_size: file.size,

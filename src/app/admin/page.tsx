@@ -8,7 +8,7 @@ import Card from "@/app/components/admin/Card";
 import DataTable from "@/app/components/admin/DataTable";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { User, UserRole, CustomerOpportunity } from "@/types/database";
+import { User, CustomerOpportunity } from "@/types/database";
 
 // Modern Icon Set
 const UsersIcon = () => (
@@ -195,7 +195,7 @@ export default function AdminDashboardPage() {
       id: `o-${o.id}`,
       type: "opportunity",
       message: `${o.company_name} - ${o.opportunity_title}`,
-      title: o.status === "Won" ? "Opportunity Won" : "New Opportunity",
+      title: o.status === "Won" ? "CRM Deal Won" : "New CRM Lead",
       date: new Date(o.created_at),
       icon: o.status === "Won" ? <TrophyIcon /> : <TargetIcon />,
       color: o.status === 'Won' ? "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" : "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
@@ -217,9 +217,9 @@ export default function AdminDashboardPage() {
           <Link href="/admin/users/new" className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-bold text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
             Add User
           </Link>
-          <Link href="/admin/opportunities" className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-sm shadow-amber-600/20">
+          <Link href="/admin/customer-pool" className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-sm shadow-amber-600/20">
             <PlusIcon />
-            <span className="ml-2">New Opportunity</span>
+            <span className="ml-2">New CRM Lead</span>
           </Link>
         </div>
       </div>
@@ -239,13 +239,13 @@ export default function AdminDashboardPage() {
           color="green"
         />
         <StatsCard
-          title="Total Opportunities"
+          title="CRM Pipeline"
           value={stats.totalOpportunities}
           icon={<TargetIcon />}
           color="blue"
         />
         <StatsCard
-          title="Won Opportunities"
+          title="Won CRM Deals"
           value={stats.wonOpportunities}
           icon={<TrophyIcon />}
           color="amber"
@@ -314,11 +314,11 @@ export default function AdminDashboardPage() {
 
       {/* Additional content area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Opportunities */}
+        {/* Recent CRM Pipeline */}
         <Card 
-          title="Recent Opportunities"
+          title="Recent CRM Pipeline"
           action={
-            <Link href="/admin/opportunities" className="text-sm font-bold text-amber-600 hover:text-amber-700 transition-colors">
+            <Link href="/admin/customer-pool" className="text-sm font-bold text-amber-600 hover:text-amber-700 transition-colors">
               View all
             </Link>
           }
@@ -367,14 +367,14 @@ export default function AdminDashboardPage() {
               </p>
             </Link>
             <Link
-              href="/admin/opportunities"
+              href="/admin/customer-pool"
               className="p-5 bg-gray-50 dark:bg-gray-800/40 border border-transparent dark:border-gray-800/60 rounded-2xl text-center hover:bg-white hover:shadow-sm dark:hover:bg-gray-800 transition-all duration-200 group"
             >
                <div className="mx-auto w-12 h-12 flex items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 mb-3 group-hover:scale-110 transition-transform">
                 <TargetIcon />
               </div>
               <p className="font-bold text-gray-900 dark:text-white">
-                Opportunities
+                CRM Pipeline
               </p>
             </Link>
             <Link

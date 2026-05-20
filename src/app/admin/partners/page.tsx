@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { Partner } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { AllowedFileTypes } from "@/lib/awsConfig";
+import { getAssetPublicUrl } from "@/lib/storage";
 import Image from "next/image";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiBriefcase, FiLink } from "react-icons/fi";
 
@@ -36,6 +37,8 @@ export default function PartnersPage() {
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
+  const getPartnerLogoUrl = (logoKey?: string | null) =>
+    logoKey ? getAssetPublicUrl(logoKey) : "";
 
   useEffect(() => {
     if (!isLoadingAuth && !hasAccess && user) {
@@ -96,11 +99,7 @@ export default function PartnersPage() {
         website_url: partner.website_url || "",
         logo: null,
       });
-      setLogoPreview(
-        partner.logo_key
-          ? `${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`}/${partner.logo_key}`
-          : null,
-      );
+      setLogoPreview(getPartnerLogoUrl(partner.logo_key) || null);
     } else {
       setIsEditMode(false);
       setSelectedPartner(null);
@@ -167,7 +166,7 @@ export default function PartnersPage() {
 
       const token = localStorage.getItem("authToken");
 
-      const response = await fetch("/api/upload/s3", {
+      const response = await fetch("/api/upload/storage", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -207,7 +206,7 @@ export default function PartnersPage() {
           if (isEditMode && selectedPartner?.logo_key) {
             const token = localStorage.getItem("authToken");
             await fetch(
-              `/api/upload/s3?key=${encodeURIComponent(selectedPartner.logo_key)}`,
+              `/api/upload/storage?key=${encodeURIComponent(selectedPartner.logo_key)}`,
               {
                 method: "DELETE",
                 headers: {
@@ -291,7 +290,7 @@ export default function PartnersPage() {
       if (partnerToDelete?.logo_key) {
         const token = localStorage.getItem("authToken");
         await fetch(
-          `/api/upload/s3?key=${encodeURIComponent(partnerToDelete.logo_key)}`,
+          `/api/upload/storage?key=${encodeURIComponent(partnerToDelete.logo_key)}`,
           {
             method: "DELETE",
             headers: {
@@ -494,7 +493,7 @@ export default function PartnersPage() {
                   <div className="w-20 h-20 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden flex-shrink-0 relative shadow-sm">
                     {partner.logo_key ? (
                       <Image 
-                        src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`}/${partner.logo_key}`} 
+                        src={getPartnerLogoUrl(partner.logo_key)}
                         alt={partner.name} 
                         fill 
                         className="object-contain p-2" 
@@ -570,7 +569,7 @@ export default function PartnersPage() {
                         <div className="w-14 h-14 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden relative flex-shrink-0 shadow-sm">
                           {partner.logo_key ? (
                             <Image 
-                               src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`}/${partner.logo_key}`} 
+                               src={getPartnerLogoUrl(partner.logo_key)}
                                alt={partner.name} 
                                fill 
                                className="object-contain p-1.5" 

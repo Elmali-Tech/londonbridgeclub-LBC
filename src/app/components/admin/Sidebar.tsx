@@ -196,7 +196,7 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
       title: "Sales & CRM",
       items: [
         {
-          name: "Customer Pool",
+          name: "CRM Pipeline",
           href: "/admin/customer-pool",
           icon: CustomerPoolIcon,
           roles: ["admin", "opportunity_manager"],
@@ -208,7 +208,7 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           roles: ["admin", "opportunity_manager", "sales_member"],
         },
         {
-          name: "Opportunities",
+          name: "Published Opportunities",
           href: "/admin/opportunities",
           icon: OpportunitiesIcon,
           roles: ["admin", "opportunity_manager"],

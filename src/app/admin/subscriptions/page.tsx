@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
+import { getAssetPublicUrl } from "@/lib/storage";
 import {
   FiGrid, FiList, FiCreditCard, FiTrendingUp, FiAward,
   FiSearch, FiUser, FiMail, FiCalendar, FiXCircle, FiRefreshCw,
@@ -179,8 +180,6 @@ export default function SubscriptionsPage() {
     return ["corporate", "platinum", "emerald", "diamond"].includes(slug);
   }).length;
 
-  const S3_BASE = `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`;
-
   if (isLoadingAuth) return (
     <div className="flex justify-center items-center h-[calc(100vh-100px)]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600" />
@@ -295,7 +294,7 @@ export default function SubscriptionsPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
                       {sub.user?.profile_image_key ? (
-                        <img src={`${S3_BASE}/${sub.user.profile_image_key}`} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
+                        <img src={getAssetPublicUrl(sub.user.profile_image_key)} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                       ) : <FiUser className="w-5 h-5 text-gray-400" />}
                     </div>
                     <div>
@@ -378,7 +377,7 @@ export default function SubscriptionsPage() {
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
                             {sub.user?.profile_image_key ? (
-                              <img src={`${S3_BASE}/${sub.user.profile_image_key}`} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
+                              <img src={getAssetPublicUrl(sub.user.profile_image_key)} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                             ) : <FiUser className="w-4 h-4 text-gray-400" />}
                           </div>
                           <div>

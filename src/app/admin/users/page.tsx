@@ -6,6 +6,7 @@ import { User, UserRole } from "@/types/database";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
+import { getAssetPublicUrl } from "@/lib/storage";
 import {
   HiOutlineSearch,
   HiOutlineUserGroup,
@@ -246,7 +247,7 @@ export default function UsersPage() {
                   <div className="w-24 h-24 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex items-center justify-center relative mb-4">
                     {user.profile_image_key ? (
                       <img 
-                        src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`}/${user.profile_image_key}`}
+                        src={getAssetPublicUrl(user.profile_image_key)}
                         alt={user.full_name || "Profile Avatar"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -324,7 +325,7 @@ export default function UsersPage() {
                           <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden relative flex-shrink-0 border border-gray-200 dark:border-gray-700">
                             {user.profile_image_key ? (
                               <img
-                                src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || "londonbridgeprojt"}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || "eu-west-1"}.amazonaws.com`}/${user.profile_image_key}`}
+                                src={getAssetPublicUrl(user.profile_image_key)}
                                 alt={user.full_name || "Profile Avatar"}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {

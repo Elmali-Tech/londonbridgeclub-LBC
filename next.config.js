@@ -38,13 +38,20 @@ const nextConfig = {
         hostname: '*.s3.*.amazonaws.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ckwyopcrkrlwodgxylbx.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '',
+        pathname: '/**',
       }
     ],
-    domains: ['localhost', 'londonbridgeproject.s3.eu-north-1.amazonaws.com', 'londonbridgeprojt.s3.eu-west-1.amazonaws.com'],
-  },
-  // ESLint hatalarını build sırasında ignore et
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   // Output standalone ayarı
   output: 'standalone',
@@ -58,4 +65,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;

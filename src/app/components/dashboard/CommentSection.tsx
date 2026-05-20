@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
 import { useAuth } from '@/context/AuthContext';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 // Tip tanımları
 interface User {
@@ -252,7 +253,7 @@ export default function CommentSection({ postId, onCommentAdded }: CommentSectio
       return (
         <div className="h-full w-full relative">
           <Image
-            src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+            src={getAssetPublicUrl(user.profile_image_key)}
             alt={user.full_name || 'User'}
             fill
             className="object-cover"
@@ -277,7 +278,7 @@ export default function CommentSection({ postId, onCommentAdded }: CommentSectio
       return (
         <div className="h-full w-full relative">
           <Image
-            src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${comment.user.profile_image_key}`}
+            src={getAssetPublicUrl(comment.user.profile_image_key)}
             alt={comment.user.full_name}
             fill
             className="object-cover"
@@ -426,7 +427,7 @@ export default function CommentSection({ postId, onCommentAdded }: CommentSectio
                         <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-gray-200 shadow-sm">
                           {reply.user?.profile_image_key ? (
                             <Image
-                              src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${reply.user.profile_image_key}`}
+                              src={getAssetPublicUrl(reply.user.profile_image_key)}
                               alt={reply.user.full_name}
                               fill
                               className="object-cover"

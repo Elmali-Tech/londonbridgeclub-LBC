@@ -125,6 +125,31 @@ export interface CustomerOpportunity {
   };
 }
 
+export interface Opportunity {
+  id: number;
+  title: string;
+  company: string;
+  service_detail: string;
+  category: string;
+  estimated_budget: string;
+  description?: string;
+  image_key?: string | null;
+  is_active: boolean;
+  customer_opportunity_id?: number | null;
+  created_at: string;
+}
+
+export interface OpportunityInterest {
+  id: number;
+  user_id: number;
+  opportunity_id: number;
+  customer_opportunity_id?: number | null;
+  status: "new" | "contacted" | "converted" | "dismissed";
+  notes?: string | null;
+  followed_up_at?: string | null;
+  created_at: string;
+}
+
 export interface Partner {
   id: number;
   name: string;
@@ -172,4 +197,6 @@ export interface Database {
   partners: Partner[];
   benefits: Benefit[];
   customer_opportunities: CustomerOpportunity[];
+  opportunities: Opportunity[];
+  opportunity_interests: OpportunityInterest[];
 }

@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useMessaging } from '@/hooks/useMessaging';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 export default function DashboardNavbar() {
   const { user, logout } = useAuth();
@@ -228,7 +229,7 @@ export default function DashboardNavbar() {
                               <div className="w-8 h-8 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold text-xs">
                                 {user.profile_image_key ? (
                                   <Image 
-                                    src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                                    src={getAssetPublicUrl(user.profile_image_key)}
                                     alt={user.full_name}
                                     width={32}
                                     height={32}
@@ -322,7 +323,7 @@ export default function DashboardNavbar() {
                               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold text-sm">
                                 {user.profile_image_key ? (
                                   <Image 
-                                    src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                                    src={getAssetPublicUrl(user.profile_image_key)}
                                     alt={user.full_name}
                                     width={40}
                                     height={40}
@@ -511,7 +512,7 @@ export default function DashboardNavbar() {
                 <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-gray-200">
                   {user?.profile_image_key ? (
                     <Image
-                      src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                      src={getAssetPublicUrl(user.profile_image_key)}
                       alt={user.full_name || 'User'}
                       width={32}
                       height={32}
@@ -544,7 +545,7 @@ export default function DashboardNavbar() {
                       <div className="h-12 w-12 rounded-full overflow-hidden">
                         {user?.profile_image_key ? (
                           <Image
-                            src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                            src={getAssetPublicUrl(user.profile_image_key)}
                             alt={user.full_name || 'User'}
                             width={48}
                             height={48}
@@ -755,7 +756,7 @@ export default function DashboardNavbar() {
                     <div className="h-8 w-8 rounded-full overflow-hidden">
                       {user?.profile_image_key ? (
                         <Image
-                          src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                          src={getAssetPublicUrl(user.profile_image_key)}
                           alt={user.full_name || 'User'}
                           width={32}
                           height={32}

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { HiCake, HiX } from 'react-icons/hi';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface BirthdayUser {
   id: number;
@@ -95,7 +96,7 @@ export default function BirthdayBanner() {
                     <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-300 flex-shrink-0 shadow-sm">
                       {user.profile_image_key ? (
                         <Image
-                          src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${user.profile_image_key}`}
+                          src={getAssetPublicUrl(user.profile_image_key)}
                           alt={user.full_name}
                           width={36}
                           height={36}
@@ -130,4 +131,3 @@ export default function BirthdayBanner() {
     </div>
   );
 }
-

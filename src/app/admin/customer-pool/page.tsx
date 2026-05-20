@@ -8,31 +8,106 @@ import { supabase } from "@/lib/supabase";
 import { CustomerOpportunity } from "@/types/database";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminContainer from "@/app/components/admin/AdminContainer";
+import { getAssetPublicUrl } from "@/lib/storage";
 import {
   FiPlus,
   FiSearch,
   FiFilter,
   FiUser,
   FiBriefcase,
-  FiDollarSign,
-  FiClock,
   FiEdit3,
   FiTrash2,
   FiCheckCircle,
   FiXCircle,
-  FiAlertCircle,
   FiCalendar,
   FiActivity,
-  FiChevronRight,
   FiLayers,
   FiArrowUpRight
 } from "react-icons/fi";
+
+const PIPELINE_STAGES = ["Lead", "Qualified", "Proposal", "Negotiation"];
+const COMMON_HASHTAGS = [
+  "urgent",
+  "followup",
+  "strategic",
+  "high-value",
+  "negotiation",
+  "partnership",
+  "expansion",
+  "renewal",
+];
+const CRM_TEXT_FIELDS = [
+  { label: "Full Identity", name: "customer_name", placeholder: "Individual Name" },
+  { label: "Entity/Company", name: "company_name", placeholder: "Legal Entity" },
+  { label: "Primary Contact", name: "contact_person", placeholder: "Contact Name" },
+  { label: "Opportunity Title", name: "opportunity_title", placeholder: "e.g. Q4 Expansion" },
+  { label: "Deal Valuation", name: "estimated_deal_size", placeholder: "e.g. $50,000" },
+  { label: "Lead Manager", name: "responsible_person", placeholder: "Owner Name" },
+] satisfies Array<{
+  label: string;
+  name: keyof Pick<
+    CRMFormData,
+    | "customer_name"
+    | "company_name"
+    | "contact_person"
+    | "opportunity_title"
+    | "estimated_deal_size"
+    | "responsible_person"
+  >;
+  placeholder: string;
+}>;
+
+const normalizeStageLabel = (stage?: string | null) => {
+  if (!stage || stage === "Prospect") return "Lead";
+  if (stage === "Opportunity") return "Qualified";
+  return stage;
+};
+
+type CRMFormData = {
+  customer_name: string;
+  company_name: string;
+  contact_person: string;
+  opportunity_title: string;
+  opportunity_description: string;
+  estimated_deal_size: string;
+  deal_stage: string;
+  responsible_person: string;
+  expected_closing_date: string;
+  status: "Active" | "Won" | "Lost";
+};
+
+type PartnerOption = {
+  name: string;
+  logo_key: string | null;
+};
+
+type MentionUser = {
+  id: number;
+  full_name: string | null;
+  profile_image_key: string | null;
+};
+
+type CustomerOpportunityInterest = {
+  id: number;
+  customer_opportunity_id: number | null;
+  status: string;
+  created_at: string;
+  user?: {
+    id: number;
+    full_name: string;
+    email: string;
+  } | null;
+  opportunity?: {
+    id: number;
+    title: string;
+  } | null;
+};
 
 export default function CustomerPoolPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [opportunities, setOpportunities] = useState<CustomerOpportunity[]>([]);
-  const [partners, setPartners] = useState<any[]>([]);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -40,19 +115,20 @@ export default function CustomerPoolPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<MentionUser[]>([]);
+  const [interests, setInterests] = useState<CustomerOpportunityInterest[]>([]);
+  const [publishingId, setPublishingId] = useState<number | null>(null);
   const [tagging, setTagging] = useState<{ type: '@' | '#', query: string, position: number } | null>(null);
-  const commonHashtags = ['urgent', 'followup', 'strategic', 'high-value', 'negotiation', 'partnership', 'expansion', 'renewal'];
 
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CRMFormData>({
     customer_name: "",
     company_name: "",
     contact_person: "",
     opportunity_title: "",
     opportunity_description: "",
     estimated_deal_size: "",
-    deal_stage: "Prospect",
+    deal_stage: "Lead",
     responsible_person: "",
     expected_closing_date: "",
     status: "Active" as "Active" | "Won" | "Lost",
@@ -67,11 +143,13 @@ export default function CustomerPoolPage() {
   }, [formData.company_name, partners]);
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (authLoading) return;
+    if (!user) {
       router.push("/admin");
       return;
     }
     fetchOpportunities();
+    fetchInterests();
     fetchPartners();
     fetchUsers();
   }, [user, authLoading, router]);
@@ -79,6 +157,7 @@ export default function CustomerPoolPage() {
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase.from('users').select('id, full_name, profile_image_key');
+      if (error) throw error;
       if (data) setUsers(data);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -90,6 +169,7 @@ export default function CustomerPoolPage() {
       const { data, error } = await supabase
         .from('partners')
         .select('name, logo_key');
+      if (error) throw error;
       if (data) setPartners(data);
     } catch (error) {
       console.error('Error fetching partners:', error);
@@ -110,10 +190,27 @@ export default function CustomerPoolPage() {
       } else {
         toast.error(data.error || "Failed to fetch opportunities");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch opportunities");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInterests = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/customer-opportunities/interests", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setInterests(data.interests || []);
+      }
+    } catch (error) {
+      console.error("Error fetching opportunity interests:", error);
     }
   };
 
@@ -174,7 +271,7 @@ export default function CustomerPoolPage() {
       if (!partnerExists && formData.company_name.trim()) {
         await supabase.from('partners').insert({
           name: formData.company_name.trim(),
-          description: `Strategic affiliate synchronized from Customer Pool (Primary Contact: ${formData.contact_person || 'N/A'})`,
+          description: `Strategic affiliate synchronized from CRM Pipeline (Primary Contact: ${formData.contact_person || 'N/A'})`,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -200,10 +297,39 @@ export default function CustomerPoolPage() {
       } else {
         toast.error(data.error || "Action failed");
       }
-    } catch (error) {
+    } catch {
       toast.error("Action failed");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePublish = async (id: number) => {
+    const token = localStorage.getItem("authToken");
+    setPublishingId(id);
+    try {
+      const response = await fetch(`/api/customer-opportunities/${id}/publish`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(
+          data.mode === "updated"
+            ? "Published opportunity updated"
+            : "Published to member opportunities",
+        );
+        fetchOpportunities();
+        fetchInterests();
+      } else {
+        toast.error(data.error || "Publish failed");
+      }
+    } catch {
+      toast.error("Publish failed");
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -224,14 +350,14 @@ export default function CustomerPoolPage() {
         opportunity_title: opp.opportunity_title,
         opportunity_description: opp.opportunity_description || "",
         estimated_deal_size: opp.estimated_deal_size || "",
-        deal_stage: opp.deal_stage || "Prospect",
+        deal_stage: normalizeStageLabel(opp.deal_stage),
         responsible_person: opp.responsible_person || "",
         expected_closing_date: formattedDate,
         status: opp.status,
       });
       setEditingId(opp.id);
       setShowForm(true);
-    } catch (error) {
+    } catch {
       toast.error("Could not open edit form");
     }
   };
@@ -254,7 +380,7 @@ export default function CustomerPoolPage() {
       } else {
         toast.error(data.error || "Delete failed");
       }
-    } catch (error) {
+    } catch {
       toast.error("Delete failed");
     }
   };
@@ -267,7 +393,7 @@ export default function CustomerPoolPage() {
       opportunity_title: "",
       opportunity_description: "",
       estimated_deal_size: "",
-      deal_stage: "Prospect",
+      deal_stage: "Lead",
       responsible_person: "",
       expected_closing_date: "",
       status: "Active",
@@ -290,6 +416,39 @@ export default function CustomerPoolPage() {
     });
   }, [opportunities, searchTerm, statusFilter]);
 
+  const interestsByCustomerOpportunityId = useMemo(() => {
+    return interests.reduce<Record<number, CustomerOpportunityInterest[]>>(
+      (groups, interest) => {
+        if (!interest.customer_opportunity_id) return groups;
+        const id = interest.customer_opportunity_id;
+        groups[id] = groups[id] || [];
+        groups[id].push(interest);
+        return groups;
+      },
+      {},
+    );
+  }, [interests]);
+
+  const matchingMentionUsers = useMemo(() => {
+    if (!tagging || tagging.type !== "@") return [];
+    const query = tagging.query.toLowerCase();
+    return users.filter(
+      (candidate): candidate is MentionUser & { full_name: string } =>
+        Boolean(candidate.full_name?.toLowerCase().includes(query)),
+    );
+  }, [tagging, users]);
+
+  const matchingHashtags = useMemo(() => {
+    if (!tagging || tagging.type !== "#") return [];
+    const query = tagging.query.toLowerCase();
+    return COMMON_HASHTAGS.filter((hashtag) =>
+      hashtag.toLowerCase().includes(query),
+    );
+  }, [tagging]);
+
+  const getInterestedMembers = (id: number) =>
+    interestsByCustomerOpportunityId[id] || [];
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Won": return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
@@ -301,7 +460,7 @@ export default function CustomerPoolPage() {
   const getPartnerLogo = (companyName: string) => {
     const partner = partners.find(p => p.name.toLowerCase() === companyName.toLowerCase());
     if (partner?.logo_key) {
-      return `${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com`}/${partner.logo_key}`;
+      return getAssetPublicUrl(partner.logo_key);
     }
     return null;
   };
@@ -329,10 +488,10 @@ export default function CustomerPoolPage() {
               Central Portfolio
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tight text-gray-900 dark:text-white">
-              Customer <span className="text-amber-500 italic">Pool</span>
+              CRM <span className="text-amber-500 italic">Pipeline</span>
             </h1>
             <p className="text-gray-500 dark:text-gray-400 font-medium max-w-lg">
-              Aggregate hub for strategic prospect management and deal acquisition logic.
+              Central source for strategic leads, deal stages and member-published opportunities.
             </p>
           </div>
 
@@ -341,7 +500,7 @@ export default function CustomerPoolPage() {
                 onClick={() => setShowForm(true)}
                 className="flex items-center gap-3 bg-amber-500 hover:bg-amber-600 text-black px-6 py-4 rounded-2xl font-black transition-all shadow-[0_15px_30px_-10px_rgba(245,158,11,0.3)] active:scale-95 text-xs uppercase tracking-widest"
               >
-                <FiPlus className="text-xl" /> Create Prospect
+                <FiPlus className="text-xl" /> Create CRM Lead
               </button>
           )}
         </div>
@@ -419,10 +578,18 @@ export default function CustomerPoolPage() {
                         <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${getStatusColor(opp.status)}`}>
                            {opp.status}
                         </span>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                           <button onClick={() => handleEdit(opp)} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400 hover:text-amber-500 transition-all"><FiEdit3 size={16} /></button>
-                           {canDelete && <button onClick={() => handleDelete(opp.id)} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400 hover:text-rose-500 transition-all"><FiTrash2 size={16} /></button>}
-                        </div>
+	                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                           <button
+                             onClick={() => handlePublish(opp.id)}
+                             disabled={publishingId === opp.id}
+                             title="Publish to member opportunities"
+                             className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400 hover:text-blue-500 transition-all disabled:opacity-50"
+                           >
+                             <FiArrowUpRight size={16} />
+                           </button>
+	                           <button onClick={() => handleEdit(opp)} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400 hover:text-amber-500 transition-all"><FiEdit3 size={16} /></button>
+	                           {canDelete && <button onClick={() => handleDelete(opp.id)} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400 hover:text-rose-500 transition-all"><FiTrash2 size={16} /></button>}
+	                        </div>
                      </div>
 
                      <div className="space-y-1">
@@ -454,9 +621,9 @@ export default function CustomerPoolPage() {
                         </div>
                         <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
-                           <p className="text-base md:text-lg font-black text-indigo-400 break-words leading-tight">{opp.deal_stage}</p>
-                        </div>
-                     </div>
+	                           <p className="text-base md:text-lg font-black text-indigo-400 break-words leading-tight">{normalizeStageLabel(opp.deal_stage)}</p>
+	                        </div>
+	                     </div>
 
                      <div className="space-y-4 pt-2">
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 dark:text-gray-300">
@@ -466,13 +633,36 @@ export default function CustomerPoolPage() {
                               <p>{opp.customer_name}</p>
                            </div>
                         </div>
-                        {opp.opportunity_description && (
-                           <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 italic text-xs font-medium text-slate-500 dark:text-slate-400">
-                              \"{opp.opportunity_description}\"
-                           </div>
-                        )}
-                     </div>
-                  </div>
+	                        {opp.opportunity_description && (
+	                           <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 italic text-xs font-medium text-slate-500 dark:text-slate-400">
+                              &ldquo;{opp.opportunity_description}&rdquo;
+	                           </div>
+	                        )}
+                          {getInterestedMembers(opp.id).length > 0 && (
+                            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300">
+                              <p className="text-[10px] uppercase tracking-widest text-blue-400 mb-2">
+                                Member Interest
+                              </p>
+                              <div className="space-y-1">
+                                {getInterestedMembers(opp.id)
+                                  .slice(0, 3)
+                                  .map((interest) => (
+                                    <p key={interest.id} className="truncate">
+                                      {interest.user?.full_name ||
+                                        interest.user?.email ||
+                                        `User #${interest.id}`}
+                                    </p>
+                                  ))}
+                                {getInterestedMembers(opp.id).length > 3 && (
+                                  <p className="text-blue-400">
+                                    +{getInterestedMembers(opp.id).length - 3} more
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+	                     </div>
+	                  </div>
 
                   <div className="px-8 py-5 bg-gray-50 dark:bg-[#1A2129] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
                      <div className="flex items-center gap-2">
@@ -513,7 +703,7 @@ export default function CustomerPoolPage() {
                   <div className="space-y-1">
                     <span className="text-amber-500 font-black tracking-widest text-[10px] uppercase">Transaction Engine</span>
                     <h2 className="text-4xl font-black text-gray-900 dark:text-white leading-none">
-                      {editingId ? "Update" : "Initiate"} Prospect
+                      {editingId ? "Update" : "Initiate"} CRM Lead
                     </h2>
                   </div>
                   <button onClick={resetForm} className="p-4 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all text-gray-400"><FiXCircle size={32} /></button>
@@ -521,21 +711,14 @@ export default function CustomerPoolPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     {[
-                        { label: "Full Identity", name: "customer_name", placeholder: "Individual Name" },
-                        { label: "Entity/Company", name: "company_name", placeholder: "Legal Entity" },
-                        { label: "Primary Contact", name: "contact_person", placeholder: "Contact Name" },
-                        { label: "Prospect Title", name: "opportunity_title", placeholder: "e.g. Q4 Expansion" },
-                        { label: "Deal Valuation", name: "estimated_deal_size", placeholder: "e.g. $50,000" },
-                        { label: "Lead Manager", name: "responsible_person", placeholder: "Owner Name" },
-                     ].map((field, i) => (
+                     {CRM_TEXT_FIELDS.map((field, i) => (
                         <div key={i} className="space-y-2 relative">
                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">{field.label}</label>
                            <input
                               name={field.name}
                               required={field.name !== "contact_person"}
                               placeholder={field.placeholder}
-                              value={(formData as any)[field.name]}
+                              value={formData[field.name]}
                               onChange={handleInputChange}
                               onFocus={() => field.name === "company_name" && setShowSuggestions(true)}
                               onBlur={() => field.name === "company_name" && setTimeout(() => setShowSuggestions(false), 200)}
@@ -556,7 +739,7 @@ export default function CustomerPoolPage() {
                                    <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0">
                                      {partner.logo_key ? (
                                        <img 
-                                         src={`${process.env.NEXT_PUBLIC_AWS_S3_URL || `https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com`}/${partner.logo_key}`} 
+                                         src={getAssetPublicUrl(partner.logo_key)}
                                          alt="" 
                                          className="w-full h-full object-contain p-1"
                                        />
@@ -580,12 +763,11 @@ export default function CustomerPoolPage() {
                           onChange={handleInputChange}
                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
                         >
-                          <option>Prospect</option>
-                          <option>Qualified</option>
-                          <option>Proposal</option>
-                          <option>Negotiation</option>
-                        </select>
-                     </div>
+	                          {PIPELINE_STAGES.map((stage) => (
+                              <option key={stage}>{stage}</option>
+                            ))}
+	                        </select>
+	                     </div>
 
                      <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Target Close</label>
@@ -601,11 +783,11 @@ export default function CustomerPoolPage() {
                      <div className="md:col-span-2 space-y-4">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2 text-center block">Execution Status</label>
                         <div className="flex gap-4">
-                           {["Active", "Won", "Lost"].map((s) => (
+                           {(["Active", "Won", "Lost"] as const).map((s) => (
                              <button
                                key={s}
                                type="button"
-                               onClick={() => setFormData((p) => ({ ...p, status: s as any }))}
+                               onClick={() => setFormData((p) => ({ ...p, status: s }))}
                                className={`flex-1 py-4 rounded-2xl border-2 font-black tracking-widest text-[10px] uppercase transition-all ${formData.status === s ? "border-amber-500 bg-amber-500/10 text-amber-500 shadow-xl" : "border-gray-100 dark:border-gray-800 text-gray-400 dark:text-gray-600"}`}
                              >
                                {s}
@@ -625,14 +807,14 @@ export default function CustomerPoolPage() {
                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-3xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white resize-none"
                         />
                         
-                        {tagging && (
-                          <div className="absolute z-[70] bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 max-h-48 overflow-y-auto">
-                            {tagging.type === '@' ? (
-                              users.filter(u => u.full_name?.toLowerCase().includes(tagging.query.toLowerCase())).length > 0 ? (
-                                users.filter(u => u.full_name?.toLowerCase().includes(tagging.query.toLowerCase())).map((u) => (
-                                  <button
-                                    key={u.id}
-                                    type="button"
+	                        {tagging && (
+	                          <div className="absolute z-[70] bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 max-h-48 overflow-y-auto">
+	                            {tagging.type === '@' ? (
+	                              matchingMentionUsers.length > 0 ? (
+	                                matchingMentionUsers.map((u) => (
+	                                  <button
+	                                    key={u.id}
+	                                    type="button"
                                     onClick={() => handleSelectTag(u.full_name.replace(/\s+/g, ''))}
                                     className="w-full text-left px-4 py-3 hover:bg-amber-500/10 hover:text-amber-500 transition-colors flex items-center gap-2 border-b border-gray-50 dark:border-gray-800 last:border-0"
                                   >
@@ -643,11 +825,11 @@ export default function CustomerPoolPage() {
                                   </button>
                                 ))
                               ) : (
-                                <div className="p-4 text-xs text-gray-500 text-center font-bold">No users found</div>
-                              )
-                            ) : (
-                              commonHashtags.filter(h => h.toLowerCase().includes(tagging.query.toLowerCase())).length > 0 ? (
-                                commonHashtags.filter(h => h.toLowerCase().includes(tagging.query.toLowerCase())).map((h) => (
+	                                <div className="p-4 text-xs text-gray-500 text-center font-bold">No users found</div>
+	                              )
+	                            ) : (
+	                              matchingHashtags.length > 0 ? (
+	                                matchingHashtags.map((h) => (
                                   <button
                                     key={h}
                                     type="button"
@@ -669,7 +851,7 @@ export default function CustomerPoolPage() {
 
                   <div className="pt-8 flex gap-4">
                     <button type="submit" disabled={submitting} className="flex-1 py-6 bg-amber-500 hover:bg-amber-600 text-black font-black rounded-2xl shadow-xl transition-all disabled:opacity-50 uppercase tracking-widest text-xs">
-                      {submitting ? "Processing..." : editingId ? "Finalize Update" : "Establish Prospect"}
+                      {submitting ? "Processing..." : editingId ? "Finalize Update" : "Establish CRM Lead"}
                     </button>
                   </div>
                 </form>

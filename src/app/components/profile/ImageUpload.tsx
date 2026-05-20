@@ -66,7 +66,7 @@ export default function ImageUpload({
     setProgress(0);
   };
 
-  // Upload the file to S3
+  // Upload the file to Supabase Storage
   const handleSaveImage = async () => {
     if (!selectedFile) return;
 
@@ -86,8 +86,8 @@ export default function ImageUpload({
       formData.append('file', selectedFile);
       formData.append('fileType', getFileType());
 
-      // Upload to S3 via our API
-      const response = await fetch('/api/upload/s3', {
+      // Upload to storage via our API
+      const response = await fetch('/api/upload/storage', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

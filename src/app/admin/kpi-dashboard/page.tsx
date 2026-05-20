@@ -18,18 +18,16 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
   AreaChart,
   Area,
 } from "recharts";
+import type { IconType } from "react-icons";
 import {
   FiTrendingUp,
   FiPieChart,
-  FiBarChart2,
   FiActivity,
   FiDollarSign,
   FiCheckCircle,
-  FiXCircle,
   FiTarget,
   FiUser,
   FiBriefcase,
@@ -46,6 +44,15 @@ const COLORS = [
   "#8B5CF6", // Violet
   "#EC4899", // Pink
 ];
+
+type CustomStatCardProps = {
+  title: string;
+  value: string | number;
+  icon: IconType;
+  colorClass: string;
+  subValue?: string;
+  trend?: string;
+};
 
 export default function KPIDashboardPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -75,7 +82,7 @@ export default function KPIDashboardPage() {
       } else {
         toast.error(data.error || "Failed to fetch opportunities");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch opportunities");
     } finally {
       setLoading(false);
@@ -145,7 +152,7 @@ export default function KPIDashboardPage() {
       .slice(0, 5); // Just top 5 for better UI
 
     // Pipeline Data
-    const pipelineStages = ["Lead", "Opportunity", "Proposal", "Negotiation"];
+    const pipelineStages = ["Lead", "Qualified", "Proposal", "Negotiation"];
     const pipelineData = pipelineStages.map((stage) => ({
       name: stage,
       count: opportunities.filter(
@@ -197,7 +204,14 @@ export default function KPIDashboardPage() {
 
   if (!hasAccess) return null;
 
-  const CustomStatCard = ({ title, value, icon: Icon, colorClass, subValue, trend }: any) => (
+  const CustomStatCard = ({
+    title,
+    value,
+    icon: Icon,
+    colorClass,
+    subValue,
+    trend,
+  }: CustomStatCardProps) => (
     <motion.div
       whileHover={{ y: -4 }}
       className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800/50 shadow-sm relative overflow-hidden group transition-all duration-300"
@@ -397,7 +411,7 @@ export default function KPIDashboardPage() {
                <div className="relative z-10 space-y-4">
                   <h3 className="text-4xl font-black tracking-tight leading-none">Operational <br/>Overview Active</h3>
                   <p className="text-indigo-100 font-medium max-w-sm">Welcome to the London Bridge Club control center. Your viewer access provides real-time visibility into project volumes.</p>
-                  <button onClick={() => router.push('/admin/customer-pool')} className="mt-4 px-6 py-3 bg-white text-indigo-600 font-black rounded-2xl hover:bg-opacity-90 transition-all text-sm uppercase tracking-widest shadow-lg">View Customer Pool</button>
+                  <button onClick={() => router.push('/admin/customer-pool')} className="mt-4 px-6 py-3 bg-white text-indigo-600 font-black rounded-2xl hover:bg-opacity-90 transition-all text-sm uppercase tracking-widest shadow-lg">View CRM Pipeline</button>
                </div>
             </div>
           )}

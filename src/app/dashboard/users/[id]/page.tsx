@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 import Image from 'next/image';
 import { Plus, CheckCircle } from 'lucide-react';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface UserProfileData {
   id: number;
@@ -439,7 +440,7 @@ export default function UserProfilePage() {
           <div className="relative h-48 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600">
             {profileData.banner_image_key ? (
               <Image
-                src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${profileData.banner_image_key}`}
+                src={getAssetPublicUrl(profileData.banner_image_key)}
                 alt="Profile Banner"
                 fill
                 className="object-cover"
@@ -456,7 +457,7 @@ export default function UserProfilePage() {
                 <div className="w-40 h-40 rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white">
                   {profileData.profile_image_key ? (
                     <Image
-                      src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${profileData.profile_image_key}`}
+                      src={getAssetPublicUrl(profileData.profile_image_key)}
                       alt={profileData.full_name || 'Profile'}
                       width={160}
                       height={160}

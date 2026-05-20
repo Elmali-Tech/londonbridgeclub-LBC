@@ -2,6 +2,7 @@
 // This file contains the configuration and utility functions for AWS S3 storage
 
 import { S3Client } from '@aws-sdk/client-s3';
+import { getAssetPublicUrl } from './storage';
 
 // AWS S3 client configuration
 export const s3Client = new S3Client({
@@ -29,6 +30,7 @@ export const FileSizeLimits = {
   BANNER_IMAGE: 10 * 1024 * 1024, // 10MB
   POST_MEDIA: 50 * 1024 * 1024, // 50MB
   PARTNERS_LOGOS: 5 * 1024 * 1024, // 5MB
+  BENEFITS_IMAGES: 5 * 1024 * 1024, // 5MB
 };
 
 // Allowed file types
@@ -42,6 +44,5 @@ export const AllowedFileTypes = {
 
 // Get S3 public URL for an object
 export const getS3PublicUrl = (key: string): string => {
-  if (!key) return '';
-  return `https://${bucketName}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-north-1'}.amazonaws.com/${key}`;
+  return getAssetPublicUrl(key);
 }; 

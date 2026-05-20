@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Cookies from "js-cookie";
 import { toast } from "react-hot-toast";
@@ -18,13 +17,21 @@ interface Opportunity {
   description: string;
   image_key: string | null;
   is_active: boolean;
+  customer_opportunity_id: number | null;
   created_at: string;
+}
+
+interface CustomerOpportunityOption {
+  id: number;
+  company_name: string;
+  opportunity_title: string;
+  status: string;
 }
 
 export default function AdminOpportunitiesPage() {
   const { user, isLoading } = useAuth();
-  const router = useRouter();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [customerOpportunities, setCustomerOpportunities] = useState<CustomerOpportunityOption[]>([]);
   const [loadingOpportunities, setLoadingOpportunities] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
@@ -37,6 +44,7 @@ export default function AdminOpportunitiesPage() {
     category: "",
     estimated_budget: "",
     description: "",
+    customer_opportunity_id: "",
     is_active: true,
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -46,12 +54,13 @@ export default function AdminOpportunitiesPage() {
 
   useEffect(() => {
     fetchOpportunities();
+    fetchCustomerOpportunities();
   }, []);
 
   const fetchOpportunities = async () => {
     try {
       const token = localStorage.getItem("authToken") || Cookies.get("authToken");
-      const response = await fetch("/api/admin/opportunities", {
+      const response = await fetch("/api/admin/opportunities?includeInactive=1", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -60,10 +69,25 @@ export default function AdminOpportunitiesPage() {
       } else {
         toast.error("Failed to fetch opportunities");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch opportunities");
     } finally {
       setLoadingOpportunities(false);
+    }
+  };
+
+  const fetchCustomerOpportunities = async () => {
+    try {
+      const token = localStorage.getItem("authToken") || Cookies.get("authToken");
+      const response = await fetch("/api/customer-opportunities", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCustomerOpportunities(data.opportunities || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch CRM pipeline records:", error);
     }
   };
 
@@ -93,6 +117,7 @@ export default function AdminOpportunitiesPage() {
       category: "",
       estimated_budget: "",
       description: "",
+      customer_opportunity_id: "",
       is_active: true,
     });
     setSelectedImage(null);
@@ -128,7 +153,7 @@ export default function AdminOpportunitiesPage() {
       } else {
         toast.error(data.error || "Failed to save opportunity");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to save opportunity");
     } finally {
       setSubmitting(false);
@@ -144,6 +169,7 @@ export default function AdminOpportunitiesPage() {
       category: opportunity.category || "",
       estimated_budget: opportunity.estimated_budget || "",
       description: opportunity.description || "",
+      customer_opportunity_id: opportunity.customer_opportunity_id?.toString() || "",
       is_active: opportunity.is_active ?? true,
     });
     if (opportunity.image_key) {
@@ -172,7 +198,7 @@ export default function AdminOpportunitiesPage() {
       } else {
         toast.error("Failed to delete opportunity");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete opportunity");
     }
   };
@@ -200,9 +226,9 @@ export default function AdminOpportunitiesPage() {
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in fade-in duration-500 text-gray-900 dark:text-gray-100 min-h-screen">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Opportunities</h1>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Published Opportunities</h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">
-            Manage your customer opportunities pipeline.
+            Manage member-facing opportunities linked back to the CRM pipeline.
           </p>
         </div>
         
@@ -210,7 +236,7 @@ export default function AdminOpportunitiesPage() {
           <div className="relative w-full sm:max-w-xs lg:w-64 shrink-0">
             <input
               type="text"
-              placeholder="Search opportunities..."
+              placeholder="Search published opportunities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-colors placeholder:text-gray-400"
@@ -244,7 +270,7 @@ export default function AdminOpportunitiesPage() {
             }}
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm transition-colors"
           >
-            <FiPlus /> New Opportunity
+            <FiPlus /> New Published Opportunity
           </button>
         </div>
       </div>
@@ -253,7 +279,7 @@ export default function AdminOpportunitiesPage() {
         <div className="mb-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden" ref={topRef}>
           <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-              {editingOpportunity ? "Edit Opportunity" : "Create Opportunity"}
+              {editingOpportunity ? "Edit Published Opportunity" : "Create Published Opportunity"}
             </h3>
           </div>
           <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6" encType="multipart/form-data">
@@ -278,6 +304,22 @@ export default function AdminOpportunitiesPage() {
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
                 required
               />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Linked CRM Record</label>
+              <select
+                name="customer_opportunity_id"
+                value={formData.customer_opportunity_id}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+              >
+                <option value="">No CRM link</option>
+                {customerOpportunities.map((record) => (
+                  <option key={record.id} value={record.id}>
+                    #{record.id} - {record.company_name} - {record.opportunity_title}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Service Area</label>
@@ -359,7 +401,7 @@ export default function AdminOpportunitiesPage() {
                 disabled={submitting}
                 className="px-6 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 transition disabled:opacity-50"
               >
-                {submitting ? "Saving..." : editingOpportunity ? "Save Changes" : "Create Opportunity"}
+                {submitting ? "Saving..." : editingOpportunity ? "Save Changes" : "Create Published Opportunity"}
               </button>
               <button
                 type="button"
@@ -414,6 +456,12 @@ export default function AdminOpportunitiesPage() {
                 <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mt-1">{opp.company}</p>
                 
                 <div className="mt-4 space-y-2 flex-1">
+                  {opp.customer_opportunity_id && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500 dark:text-gray-400">CRM Link</span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400">#{opp.customer_opportunity_id}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500 dark:text-gray-400">Service</span>
                     <span className="font-bold text-gray-900 dark:text-white truncate max-w-[150px]">{opp.service_detail}</span>
@@ -475,9 +523,12 @@ export default function AdminOpportunitiesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
-                      <p><span className="text-gray-400">Svc:</span> {opp.service_detail}</p>
-                      <p><span className="text-gray-400">Cat:</span> {opp.category}</p>
-                      <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-1">{opp.estimated_budget}</p>
+	                      <p><span className="text-gray-400">Svc:</span> {opp.service_detail}</p>
+	                      <p><span className="text-gray-400">Cat:</span> {opp.category}</p>
+                      {opp.customer_opportunity_id && (
+                        <p><span className="text-gray-400">CRM:</span> #{opp.customer_opportunity_id}</p>
+                      )}
+	                      <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-1">{opp.estimated_budget}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">

@@ -4,7 +4,7 @@ steps:
     args: 
       - 'build'
       - '-t'
-      - 'gcr.io/londonbridge-lbc/london'
+      - 'gcr.io/arboreal-tracer-492108-s4/lbc-web'
       - '--build-arg'
       - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}'
       - '--build-arg'
@@ -29,7 +29,7 @@ steps:
 
   # 2. Push the image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/londonbridge-lbc/london']
+    args: ['push', 'gcr.io/arboreal-tracer-492108-s4/lbc-web']
 
   # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -37,9 +37,9 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'london'
+      - 'lbc-web'
       - '--image'
-      - 'gcr.io/londonbridge-lbc/london'
+      - 'gcr.io/arboreal-tracer-492108-s4/lbc-web'
       - '--region'
       - 'europe-west1'
       - '--platform'
@@ -49,7 +49,7 @@ steps:
       - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL},NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY},STRIPE_SECRET_KEY=${_STRIPE_SECRET_KEY},NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY},STRIPE_WEBHOOK_SECRET=${_STRIPE_WEBHOOK_SECRET},NEXT_PUBLIC_BASE_URL=${_NEXT_PUBLIC_BASE_URL},NEXT_PUBLIC_STRIPE_INDIVIDUAL_PRICE_ID=${_NEXT_PUBLIC_STRIPE_INDIVIDUAL_PRICE_ID},NEXT_PUBLIC_STRIPE_INDIVIDUAL_YEARLY_PRICE_ID=${_NEXT_PUBLIC_STRIPE_INDIVIDUAL_YEARLY_PRICE_ID},NEXT_PUBLIC_STRIPE_CORPORATE_PRICE_ID=${_NEXT_PUBLIC_STRIPE_CORPORATE_PRICE_ID},NEXT_PUBLIC_STRIPE_CORPORATE_YEARLY_PRICE_ID=${_NEXT_PUBLIC_STRIPE_CORPORATE_YEARLY_PRICE_ID},NEXT_PUBLIC_AWS_REGION=${_NEXT_PUBLIC_AWS_REGION},AWS_ACCESS_KEY_ID=${_AWS_ACCESS_KEY_ID},AWS_SECRET_ACCESS_KEY=${_AWS_SECRET_ACCESS_KEY},NEXT_PUBLIC_AWS_S3_BUCKET_NAME=${_NEXT_PUBLIC_AWS_S3_BUCKET_NAME},GMAIL_EMAIL=${_GMAIL_EMAIL},GMAIL_APP_PASSWORD=${_GMAIL_APP_PASSWORD},RESET_PASSWORD_SECRET=${_RESET_PASSWORD_SECRET}'
 
 images:
-  - 'gcr.io/londonbridge-lbc/london'
+  - 'gcr.io/arboreal-tracer-492108-s4/lbc-web'
 
 substitutions:
   _NEXT_PUBLIC_SUPABASE_URL: ''

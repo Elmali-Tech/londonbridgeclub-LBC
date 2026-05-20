@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { HiX, HiUpload, HiTrash } from 'react-icons/hi';
 import ImageUpload from './ImageUpload';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 interface ImageEditModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export default function ImageEditModal({
               <p className="text-sm text-gray-600 mb-2 font-medium">Current {type === 'profile' ? 'photo' : 'cover'}:</p>
               <div className={`${type === 'profile' ? 'w-32 h-32 mx-auto rounded-full' : 'w-full aspect-video rounded-lg'} overflow-hidden border-4 border-white shadow-md bg-gray-50`}>
                 <img
-                  src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${currentImageKey}`}
+                  src={getAssetPublicUrl(currentImageKey)}
                   alt={title}
                   className="w-full h-full object-cover"
                 />
@@ -120,4 +121,3 @@ export default function ImageEditModal({
     </div>
   );
 }
-

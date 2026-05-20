@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import ImageEditModal from '@/app/components/profile/ImageEditModal';
 import { toast } from 'react-hot-toast';
 import { HiPencil } from 'react-icons/hi';
+import { getAssetPublicUrl } from '@/lib/storage';
 
 // Define user data interface
 interface UserProfileData {
@@ -237,7 +238,7 @@ export default function ProfileTab() {
         <div className="relative h-48 sm:h-56 md:h-64 bg-gradient-to-r from-amber-100 to-amber-200 group">
           {profileData?.banner_image_key ? (
             <img 
-              src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${profileData.banner_image_key}`}
+              src={getAssetPublicUrl(profileData.banner_image_key)}
               alt="Banner"
               className="w-full h-full object-cover"
             />
@@ -269,7 +270,7 @@ export default function ProfileTab() {
               <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden bg-gradient-to-r from-amber-400 to-amber-600">
                 {profileData?.profile_image_key ? (
                   <img
-                    src={`https://${process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeprojt'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1'}.amazonaws.com/${profileData.profile_image_key}`}
+                    src={getAssetPublicUrl(profileData.profile_image_key)}
                     alt={profileData.full_name || 'Profile'}
                     className="object-cover w-full h-full"
                   />
