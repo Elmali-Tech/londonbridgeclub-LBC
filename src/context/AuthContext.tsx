@@ -95,6 +95,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await login(email, password);
       
       if (result) {
+        if (!result.user.is_approved && result.user.role !== 'admin') {
+          await logout(result.token);
+          setError('Your account is currently pending approval. You will receive an email once it is approved.');
+          setUser(null);
+          setIsLoading(false);
+          return false;
+        }
+
         setUser(result.user);
         // Token'ı hem localStorage'a hem de cookie'ye kaydet
         localStorage.setItem('authToken', result.token);
@@ -200,4 +208,4 @@ export function useAuth() {
   }
   
   return context;
-} 
+}

@@ -5,6 +5,8 @@ import { getS3PublicUrl } from "@/lib/awsConfig";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import DashboardContainer from "@/app/components/dashboard/DashboardContainer";
+import RichTextTokens from "@/app/components/RichTextTokens";
+import { extractTextTokens } from "@/lib/textTokens";
 
 interface Opportunity {
   id: number;
@@ -13,7 +15,7 @@ interface Opportunity {
   service_detail: string;
   category: string;
   estimated_budget: string;
-  description: string;
+  description: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
@@ -35,7 +37,7 @@ export default function OpportunitiesPage() {
       const response = await fetch("/api/admin/opportunities");
       const data = await response.json();
       if (data.success) {
-        setOpportunities(data.opportunities);
+        setOpportunities(Array.isArray(data.opportunities) ? data.opportunities : []);
       } else {
         setError("Failed to fetch opportunities");
       }
@@ -102,7 +104,10 @@ export default function OpportunitiesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {opportunities.map((opp) => (
+              {opportunities.map((opp) => {
+                const tokens = extractTextTokens(opp.description);
+
+                return (
                 <div
                   key={opp.id}
                   onClick={() =>
@@ -147,8 +152,24 @@ export default function OpportunitiesPage() {
                       {opp.estimated_budget}
                     </p>
                     <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                      {opp.description}
+                      <RichTextTokens text={opp.description} fallback="No description provided." />
                     </p>
+                    {tokens.length > 0 && (
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {tokens.map((token) => (
+                          <span
+                            key={`${opp.id}-${token.type}-${token.value}`}
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                              token.type === "mention"
+                                ? "bg-blue-50 text-blue-600"
+                                : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {token.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center text-gray-500 text-sm">
                       <svg
                         className="h-4 w-4 mr-2"
@@ -167,7 +188,8 @@ export default function OpportunitiesPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

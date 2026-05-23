@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Cookies from "js-cookie";
+import RichTextTokens from "@/app/components/RichTextTokens";
+import { extractTextTokens } from "@/lib/textTokens";
 
 interface Opportunity {
   id: number;
@@ -23,7 +25,7 @@ interface Opportunity {
   service_detail: string;
   category: string;
   estimated_budget: string;
-  description: string;
+  description: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
@@ -124,6 +126,8 @@ export default function OpportunityDetailPage() {
       setIsSubmitting(false);
     }
   };
+
+  const descriptionTokens = extractTextTokens(opportunity?.description);
 
   return (
     <DashboardContainer
@@ -254,8 +258,24 @@ export default function OpportunityDetailPage() {
                 </h2>
                 <div className="prose max-w-none">
                   <p className="text-gray-700 text-base leading-relaxed whitespace-pre-line">
-                    {opportunity.description}
+                    <RichTextTokens text={opportunity.description} fallback="No description provided." />
                   </p>
+                  {descriptionTokens.length > 0 && (
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {descriptionTokens.map((token) => (
+                        <span
+                          key={`${token.type}-${token.value}`}
+                          className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                            token.type === "mention"
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {token.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -62,6 +62,8 @@ export default function AdminDashboardPage() {
     activeSubscriptions: 0,
     totalOpportunities: 0,
     wonOpportunities: 0,
+    totalPotentialRevenue: 0,
+    capturedRevenue: 0,
     isLoading: true
   });
   
@@ -70,6 +72,12 @@ export default function AdminDashboardPage() {
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
+
+  const parseVolume = (value?: string | null) => {
+    if (!value) return 0;
+    const parsed = parseFloat(value.replace(/[^0-9.-]+/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
   useEffect(() => {
     if (!isLoadingAuth && !hasAccess && user) {
@@ -89,6 +97,7 @@ export default function AdminDashboardPage() {
           { count: wonCount },
           { data: usersData },
           { data: oppsData },
+          { data: allOpportunityRevenueData },
         ] = await Promise.all([
           supabase.from("users").select("*", { count: "exact", head: true }),
           supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
@@ -96,13 +105,24 @@ export default function AdminDashboardPage() {
           supabase.from("customer_opportunities").select("*", { count: "exact", head: true }).eq("status", "Won"),
           supabase.from("users").select("*").order("created_at", { ascending: false }).limit(6),
           supabase.from("customer_opportunities").select("*").order("created_at", { ascending: false }).limit(5),
+          supabase.from("customer_opportunities").select("estimated_deal_size, status"),
         ]);
+
+        const totalPotentialRevenue = (allOpportunityRevenueData || []).reduce(
+          (sum, opp) => sum + parseVolume(opp.estimated_deal_size),
+          0,
+        );
+        const capturedRevenue = (allOpportunityRevenueData || [])
+          .filter((opp) => opp.status === "Won")
+          .reduce((sum, opp) => sum + parseVolume(opp.estimated_deal_size), 0);
 
         setStats({
           usersCount: usersCount || 0,
           activeSubscriptions: subsCount || 0,
           totalOpportunities: oppsCount || 0,
           wonOpportunities: wonCount || 0,
+          totalPotentialRevenue,
+          capturedRevenue,
           isLoading: false
         });
         
@@ -150,6 +170,11 @@ export default function AdminDashboardPage() {
       year: "numeric",
     }).format(new Date(dateString));
   };
+
+  const revenueCompletion =
+    stats.totalPotentialRevenue > 0
+      ? Math.min(100, Math.round((stats.capturedRevenue / stats.totalPotentialRevenue) * 100))
+      : 0;
 
   const columns = [
     {
@@ -251,6 +276,46 @@ export default function AdminDashboardPage() {
           color="amber"
           change={{ value: "Success", neutral: true }}
         />
+      </div>
+
+      <div className="mb-8 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">
+              Revenue Efficiency
+            </p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-gray-900 dark:text-white">
+              Captured vs Potential Revenue
+            </h2>
+            <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+              Visual split between won CRM value and total estimated pipeline value.
+            </p>
+          </div>
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-3 lg:max-w-2xl">
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Captured</p>
+              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">${stats.capturedRevenue.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Potential</p>
+              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">${stats.totalPotentialRevenue.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Efficiency</p>
+              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{revenueCompletion}%</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 h-4 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-amber-300 transition-all"
+            style={{ width: `${revenueCompletion}%` }}
+          />
+        </div>
+        <div className="mt-3 flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
+          <span>Won revenue</span>
+          <span>Total pipeline</span>
+        </div>
       </div>
 
       {/* Main content area */}

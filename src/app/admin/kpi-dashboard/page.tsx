@@ -305,7 +305,7 @@ export default function KPIDashboardPage() {
                 subValue="Deal conversion efficiency"
               />
               <CustomStatCard
-                title="Top Performer"
+                title="Most Sold Product"
                 value={stats.mostSoldProduct}
                 icon={FiPackage}
                 colorClass="text-indigo-500"

@@ -186,8 +186,8 @@ export default function TrackingPage() {
     <div className="min-h-screen bg-transparent text-gray-900 dark:text-gray-100 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
+        <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+          <div className="space-y-2 min-w-0">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -199,7 +199,7 @@ export default function TrackingPage() {
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-4xl md:text-5xl font-black tracking-tight dark:text-white"
+              className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight dark:text-white"
             >
               Process <span className="text-amber-500 italic">Tracking</span>
             </motion.h1>
@@ -209,13 +209,13 @@ export default function TrackingPage() {
             </p>
           </div>
 
-          <div className="w-full md:w-auto overflow-hidden">
-            <div className="flex bg-white dark:bg-[#12181F] p-1.5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-x-auto thin-scrollbar scroll-smooth">
+          <div className="w-full xl:w-auto min-w-0">
+            <div className="flex max-w-full bg-white dark:bg-[#12181F] p-1.5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-x-auto thin-scrollbar scroll-smooth">
               {["All", ...STAGES].map((stage) => (
                 <button
                   key={stage}
                   onClick={() => setStageFilter(stage)}
-                  className={`px-4 md:px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+                  className={`px-4 sm:px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
                     stageFilter === stage
                       ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
                       : "text-gray-400 hover:text-gray-900 dark:hover:text-white"

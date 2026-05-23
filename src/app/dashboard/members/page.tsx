@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { User } from "@/types/database";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   SubscriptionStatus,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/subscriptionUtils";
 import DashboardContainer from "@/app/components/dashboard/DashboardContainer";
 import { toast } from "react-hot-toast";
-import { FiPlus } from "react-icons/fi";
+import { FiMessageCircle, FiPlus } from "react-icons/fi";
 import { getAssetPublicUrl } from "@/lib/storage";
 
 // Extended User interface for follow status
@@ -19,6 +20,7 @@ interface UserWithFollowStatus extends User {
 
 export default function MembersPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [members, setMembers] = useState<UserWithFollowStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +72,41 @@ export default function MembersPage() {
     }
   };
 
+  const handleMessage = async (memberId: number, memberName: string) => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        toast.error("Please log in again");
+        return;
+      }
+
+      const response = await fetch("/api/chats", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "direct",
+          participant_ids: [memberId],
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to start conversation");
+      }
+
+      toast.success(`Started chat with ${memberName}`);
+      router.push(`/dashboard/chat/${data.chat.id}`);
+    } catch (error) {
+      console.error("Error starting member chat:", error);
+      toast.error("Failed to start conversation");
+    }
+  };
+
   // Fetch user subscription status
   useEffect(() => {
     const fetchUserSubscriptionStatus = async () => {
@@ -109,19 +146,12 @@ export default function MembersPage() {
         });
 
         const data = await response.json();
-        console.log("👥 Members API response:", data);
 
         if (!data.success) {
           throw new Error(data.error || "Failed to fetch members");
         }
 
-        // Set members with follow status
-        console.log(
-          "✅ Setting members:",
-          data.users?.length || 0,
-          "users found"
-        );
-        setMembers(data.users || []);
+        setMembers(Array.isArray(data.users) ? data.users : []);
       } catch (err) {
         console.error("Failed to load member list:", err);
         setError("An error occurred while loading the member list.");
@@ -196,16 +226,10 @@ export default function MembersPage() {
   }
 
   // Filter members by selected status tab and search query
-  const filteredMembers = members
+  const uniqueMembers = Array.from(new Map(members.map((member) => [member.id, member])).values());
+
+  const filteredMembers = uniqueMembers
     .filter((member) => {
-      console.log(
-        "🔍 Filtering member:",
-        member.full_name,
-        "status:",
-        member.status,
-        "activeTab:",
-        activeStatusTab
-      );
       return member.status === activeStatusTab;
     })
     .filter((member) => {
@@ -214,16 +238,12 @@ export default function MembersPage() {
       const query = searchQuery.toLowerCase();
       return (
         member.full_name.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query)
+        member.email.toLowerCase().includes(query) ||
+        (member.headline || "").toLowerCase().includes(query) ||
+        (member.location || "").toLowerCase().includes(query) ||
+        (member.industry || "").toLowerCase().includes(query)
       );
     });
-
-  console.log("📊 Filter results:", {
-    totalMembers: members.length,
-    filteredMembers: filteredMembers.length,
-    activeStatusTab,
-    searchQuery,
-  });
 
   // Get user initials from full_name
   const getUserInitials = (fullName: string) => {
@@ -375,7 +395,7 @@ export default function MembersPage() {
           </div>
           <div className="text-sm">
             <span className="text-gray-600">Total: </span>
-            <span className="text-black font-medium">{members.length}</span>
+            <span className="text-black font-medium">{uniqueMembers.length}</span>
             <span className="text-gray-600"> members</span>
           </div>
         </div>
@@ -421,10 +441,11 @@ export default function MembersPage() {
           {viewMode === "card" ? (
             /* Card View - LinkedIn Style */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from(new Map(filteredMembers.map(m => [m.id, m])).values()).map((member) => (
+              {filteredMembers.map((member) => (
                 <div
                   key={member.id}
-                  className="group bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-xl transition-all duration-300 relative flex flex-col"
+                  onClick={() => router.push(`/dashboard/users/${member.id}`)}
+                  className="group bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-xl transition-all duration-300 relative flex flex-col cursor-pointer"
                 >
                   {/* Cover Photo Placeholder */}
                   <div className="h-24 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 relative">
@@ -477,10 +498,12 @@ export default function MembersPage() {
                       </p>
                     </div>
 
-                    {/* Follow Button */}
-                    <div className="mt-6">
+                    <div className="mt-6 grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => handleFollow(member.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleFollow(member.id);
+                        }}
                         disabled={member.isFollowing}
                         className={`w-full py-2.5 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 ${
                           member.isFollowing
@@ -503,6 +526,16 @@ export default function MembersPage() {
                             </>
                           )}
                         </span>
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleMessage(member.id, member.full_name);
+                        }}
+                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-gray-700 transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 active:scale-95"
+                      >
+                        <FiMessageCircle className="w-4 h-4" />
+                        Message
                       </button>
                     </div>
                   </div>
@@ -537,7 +570,11 @@ export default function MembersPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredMembers.map((member) => (
-                    <tr key={member.id} className="hover:bg-gray-50">
+                    <tr
+                      key={member.id}
+                      onClick={() => router.push(`/dashboard/users/${member.id}`)}
+                      className="hover:bg-gray-50 cursor-pointer"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold overflow-hidden flex-shrink-0">
@@ -595,10 +632,25 @@ export default function MembersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
-                          <button className="px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors">
-                            Connect
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (!member.isFollowing) {
+                                handleFollow(member.id);
+                              }
+                            }}
+                            disabled={member.isFollowing}
+                            className="px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {member.isFollowing ? "Following" : "Connect"}
                           </button>
-                          <button className="px-3 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 transition-colors">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleMessage(member.id, member.full_name);
+                            }}
+                            className="px-3 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 transition-colors"
+                          >
                             Message
                           </button>
                         </div>

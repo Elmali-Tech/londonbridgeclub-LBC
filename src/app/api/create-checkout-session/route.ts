@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/lib/supabase';
 import { stripe } from '@/lib/stripe';
+import { validateToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,8 +18,47 @@ export async function POST(req: NextRequest) {
     if (billingCycle !== 'monthly' && billingCycle !== 'yearly') {
       return NextResponse.json({ error: 'billingCycle must be monthly or yearly' }, { status: 400 });
     }
+    if (!userId) {
+      return NextResponse.json({ error: 'Please log in before selecting a membership plan.' }, { status: 401 });
+    }
+
+    const authHeader = req.headers.get('authorization');
+    const sessionToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : req.cookies.get('authToken')?.value;
+
+    const authUser = sessionToken ? await validateToken(sessionToken) : null;
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (authUser.id !== Number(userId) && authUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const supabase = createClient();
+    let stripeCustomerId: string | undefined;
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, is_approved, role, stripe_customer_id')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (!userData.is_approved && userData.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Your application is pending approval. Payment will be available after admin approval.' },
+        { status: 403 }
+      );
+    }
+
+    if (userData.stripe_customer_id) {
+      stripeCustomerId = userData.stripe_customer_id;
+    }
 
     // Planı DB'den al
     const { data: plan, error: planError } = await supabase
@@ -39,6 +79,19 @@ export async function POST(req: NextRequest) {
     if (!newPriceId) {
       return NextResponse.json(
         { error: 'Stripe Price ID not configured for this plan. Please contact admin.' },
+        { status: 422 }
+      );
+    }
+
+    const selectedPrice = await stripe.prices.retrieve(newPriceId);
+    const expectedInterval = billingCycle === 'yearly' ? 'year' : 'month';
+    const actualInterval = selectedPrice.recurring?.interval;
+
+    if (actualInterval !== expectedInterval) {
+      return NextResponse.json(
+        {
+          error: `Stripe Price interval mismatch. Expected ${expectedInterval}, got ${actualInterval || 'none'}. Please check this plan in admin settings.`,
+        },
         { status: 422 }
       );
     }
@@ -150,19 +203,6 @@ export async function POST(req: NextRequest) {
         },
         quantity: 1,
       });
-    }
-
-    // Mevcut Stripe customer varsa onu kullan
-    let stripeCustomerId: string | undefined;
-    if (userId) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('stripe_customer_id')
-        .eq('id', userId)
-        .single();
-      if (userData?.stripe_customer_id) {
-        stripeCustomerId = userData.stripe_customer_id;
-      }
     }
 
     const session = await stripe.checkout.sessions.create({

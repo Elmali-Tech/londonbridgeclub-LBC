@@ -19,13 +19,51 @@ export async function PUT(request: NextRequest) {
     
     // Extract profile data
     const updateData: Partial<User> = {};
+
+    const emailValue = formData.get('email');
+    if (emailValue !== null && emailValue !== undefined && typeof emailValue === 'string') {
+      const nextEmail = emailValue.trim().toLowerCase();
+
+      if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+        return NextResponse.json(
+          { success: false, error: 'Please enter a valid email address' },
+          { status: 400 }
+        );
+      }
+
+      if (nextEmail !== session.email.toLowerCase()) {
+        const { data: existingUser, error: emailCheckError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', nextEmail)
+          .neq('id', userId)
+          .maybeSingle();
+
+        if (emailCheckError) {
+          console.error('Error checking email availability:', emailCheckError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to validate email address' },
+            { status: 500 }
+          );
+        }
+
+        if (existingUser) {
+          return NextResponse.json(
+            { success: false, error: 'This email address is already in use' },
+            { status: 409 }
+          );
+        }
+      }
+
+      updateData.email = nextEmail;
+    }
     
     // Basic text fields
-    const textFields = ['username', 'full_name', 'headline', 'bio', 'location', 'industry', 'linkedin_url', 'website_url'] as const;
+    const textFields = ['username', 'full_name', 'headline', 'bio', 'location', 'industry', 'linkedin_url', 'website_url', 'date_of_birth'] as const;
     textFields.forEach(field => {
       const value = formData.get(field);
       if (value !== null && value !== undefined && typeof value === 'string') {
-        updateData[field] = value;
+        updateData[field] = value.trim();
       }
     });
 
@@ -69,4 +107,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

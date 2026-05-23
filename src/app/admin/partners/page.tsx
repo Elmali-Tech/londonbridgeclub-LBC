@@ -446,8 +446,8 @@ export default function PartnersPage() {
                 </label>
               </div>
               {logoPreview && (
-                <div className="mt-4 relative w-40 h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                  <Image src={logoPreview} alt="Preview" fill className="object-contain p-3" />
+                <div className="mt-4 relative h-32 w-56 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 flex items-center justify-center shadow-sm">
+                  <Image src={logoPreview} alt="Preview" fill className="object-contain p-4" />
                 </div>
               )}
             </div>
@@ -490,13 +490,13 @@ export default function PartnersPage() {
               
               <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-start gap-4 mb-5">
-                  <div className="w-20 h-20 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden flex-shrink-0 relative shadow-sm">
+                  <div className="w-24 h-24 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-hidden flex-shrink-0 relative shadow-sm">
                     {partner.logo_key ? (
                       <Image 
                         src={getPartnerLogoUrl(partner.logo_key)}
                         alt={partner.name} 
                         fill 
-                        className="object-contain p-2" 
+                        className="object-contain p-4"
                       />
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent flex items-center justify-center">
@@ -566,13 +566,13 @@ export default function PartnersPage() {
                   <tr key={partner.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden relative flex-shrink-0 shadow-sm">
+                        <div className="w-16 h-16 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-hidden relative flex-shrink-0 shadow-sm">
                           {partner.logo_key ? (
                             <Image 
                                src={getPartnerLogoUrl(partner.logo_key)}
                                alt={partner.name} 
                                fill 
-                               className="object-contain p-1.5" 
+                               className="object-contain p-3"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-blue-500/5">

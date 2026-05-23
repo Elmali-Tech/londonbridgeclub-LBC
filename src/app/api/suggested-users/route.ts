@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         .from('users')
         .select('id, full_name, headline, profile_image_key, created_at, status, email, location, industry, subscription_status')
         .neq('id', user.id)
+        .eq('is_approved', true)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -119,4 +120,4 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
   }
-} 
+}

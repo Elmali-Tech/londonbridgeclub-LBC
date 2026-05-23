@@ -112,6 +112,9 @@ export interface CustomerOpportunity {
   opportunity_title: string;
   opportunity_description?: string;
   estimated_deal_size?: string;
+  referral_source?: string;
+  commission_rate?: string;
+  lbc_commission?: string;
   deal_stage?: string;
   responsible_person?: string;
   expected_closing_date?: string;
@@ -148,6 +151,20 @@ export interface OpportunityInterest {
   notes?: string | null;
   followed_up_at?: string | null;
   created_at: string;
+}
+
+export interface Event {
+  id: number;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  event_date: string;
+  event_time?: string | null;
+  category?: string | null;
+  image_key?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string | null;
 }
 
 export interface Partner {
@@ -199,4 +216,5 @@ export interface Database {
   customer_opportunities: CustomerOpportunity[];
   opportunities: Opportunity[];
   opportunity_interests: OpportunityInterest[];
+  events: Event[];
 }

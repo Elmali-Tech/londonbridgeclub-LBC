@@ -5,13 +5,9 @@ import { supabase } from "@/lib/supabase";
 import { User, UserRole } from "@/types/database";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { toast } from "react-hot-toast";
-import Image from "next/image";
+import Cookies from "js-cookie";
 import { getAssetPublicUrl } from "@/lib/storage";
 import {
-  HiOutlineSearch,
-  HiOutlineUserGroup,
-  HiOutlineShieldCheck,
-  HiOutlineMail,
   HiOutlineCheckCircle,
   HiOutlineTrash,
 } from "react-icons/hi";
@@ -74,6 +70,8 @@ export default function UsersPage() {
     );
   });
 
+  const pendingApprovalCount = users.filter((user) => !user.is_approved).length;
+
   const updateRole = async (userId: number, newRole: UserRole) => {
     try {
       const { error } = await supabase
@@ -94,9 +92,17 @@ export default function UsersPage() {
   
   const approveUser = async (userId: number) => {
     try {
+      const authToken = Cookies.get("authToken") || localStorage.getItem("authToken");
+      if (!authToken) {
+        throw new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
+      }
+
       const response = await fetch("/api/admin/approve-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ userId }),
       });
       
@@ -105,7 +111,11 @@ export default function UsersPage() {
       if (!response.ok) throw new Error(result.error);
       
       setUsers(
-        users.map((u) => (u.id === userId ? { ...u, is_approved: true } : u)),
+        users.map((u) => (
+          u.id === userId
+            ? { ...u, is_approved: true, approved_at: new Date().toISOString() }
+            : u
+        )),
       );
       toast.success("User approved and notified successfully");
     } catch (err: any) {
@@ -185,10 +195,10 @@ export default function UsersPage() {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-500 dark:text-gray-400">
-                Regulator Index
+                Pending Approval
               </p>
               <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                100%
+                {pendingApprovalCount}
               </h3>
             </div>
           </div>
@@ -267,6 +277,15 @@ export default function UsersPage() {
                   <span className={`mt-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shadow-sm ${getRoleBadge(user.role || "viewer")}`}>
                     {user.role || "viewer"}
                   </span>
+                  {!user.is_approved ? (
+                    <span className="mt-2 inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      Onaya Gönderildi
+                    </span>
+                  ) : (
+                    <span className="mt-2 inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Approved
+                    </span>
+                  )}
                 </div>
 
                 <div className="w-full p-6 flex flex-col gap-4 bg-white dark:bg-gray-900">
@@ -280,16 +299,27 @@ export default function UsersPage() {
                   </div>
                   
                   <div className="mt-4 pt-5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between w-full">
-                    <select
-                      value={user.role || "viewer"}
-                      onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
-                      className="text-xs font-bold leading-none bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500 outline-none text-gray-700 dark:text-gray-300"
-                    >
-                      <option value="viewer">Viewer</option>
-                      <option value="sales_member">Sales Member</option>
-                      <option value="opportunity_manager">Opp Manager</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={user.role || "viewer"}
+                        onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
+                        className="text-xs font-bold leading-none bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500 outline-none text-gray-700 dark:text-gray-300"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="sales_member">Sales Member</option>
+                        <option value="opportunity_manager">Opp Manager</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      {!user.is_approved && (
+                        <button
+                          onClick={() => approveUser(user.id)}
+                          className="p-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 rounded-lg transition-colors"
+                          title="Approve User"
+                        >
+                          <HiOutlineCheckCircle size={16} />
+                        </button>
+                      )}
+                    </div>
 
                     {isDeleting === user.id ? (
                       <div className="flex items-center gap-1">
@@ -353,8 +383,8 @@ export default function UsersPage() {
                           {user.role || "viewer"}
                         </span>
                         {!user.is_approved && (
-                          <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                            Pending Approval
+                          <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            Onaya Gönderildi
                           </span>
                         )}
                         {user.is_approved && (

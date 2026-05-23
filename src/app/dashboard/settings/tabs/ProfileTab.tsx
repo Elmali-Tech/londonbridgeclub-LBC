@@ -28,7 +28,7 @@ interface UserProfileData {
 }
 
 export default function ProfileTab() {
-  const { user } = useAuth();
+  const { user, updateUserData } = useAuth();
   const [saving, setSaving] = useState(false);
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [formData, setFormData] = useState<Partial<UserProfileData>>({});
@@ -174,32 +174,53 @@ export default function ProfileTab() {
     
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: formData.full_name,
-          username: formData.username,
-          headline: formData.headline,
-          bio: formData.bio,
-          location: formData.location,
-          industry: formData.industry,
-          linkedin_url: formData.linkedin_url,
-          website_url: formData.website_url,
-          date_of_birth: formData.date_of_birth
-        })
-        .eq('id', user.id);
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast.error('Your session has expired. Please log in again.');
+        return;
+      }
+
+      const payload = new FormData();
+      const editableFields: Array<keyof UserProfileData> = [
+        'email',
+        'full_name',
+        'username',
+        'headline',
+        'bio',
+        'location',
+        'industry',
+        'linkedin_url',
+        'website_url',
+        'date_of_birth',
+      ];
+
+      editableFields.forEach((field) => {
+        const value = formData[field];
+        payload.append(field, typeof value === 'string' ? value : '');
+      });
+
+      const response = await fetch('/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to update profile information');
+      }
       
-      if (error) throw error;
-      
-      setProfileData(prev => ({
-        ...prev!,
-        ...formData
-      }));
+      setProfileData(result.user as UserProfileData);
+      setFormData(result.user as UserProfileData);
+      updateUserData(result.user);
       
       toast.success('Profile information updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
-      toast.error('Failed to update profile information');
+      toast.error(error.message || 'Failed to update profile information');
     } finally {
       setSaving(false);
     }
@@ -334,15 +355,20 @@ export default function ProfileTab() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {formData.status === 'corporate' ? 'Corporate Email Address' : 'Email Address'}
+                </label>
                 <input 
                   type="email"
                   name="email"
                   value={formData.email || ''}
-                  disabled
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-500 bg-gray-50 cursor-not-allowed"
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
+                  placeholder={formData.status === 'corporate' ? 'Enter corporate contact email' : 'Enter your email address'}
                 />
-                <p className="text-xs text-gray-500 mt-1">Contact support to change your email address</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  This address is used for login, approval and membership emails.
+                </p>
               </div>
               
               <div>

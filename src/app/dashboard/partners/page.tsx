@@ -155,12 +155,12 @@ export default function PartnersPage() {
             {filteredPartners.map((partner) => (
                   <div key={partner.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-all duration-300 hover:border-amber-200">
                     <div className="flex flex-col items-center text-center">
-                      <div className="w-24 h-24 rounded-xl overflow-hidden flex items-center justify-center mb-5 border border-gray-100 bg-gray-50/50 shadow-sm flex-shrink-0 relative">
+                      <div className="w-28 h-28 rounded-xl overflow-hidden flex items-center justify-center mb-5 border border-gray-100 bg-white shadow-sm flex-shrink-0 relative">
                       {partner.logo_key ? (
                         <img
                           src={getPartnerLogoUrl(partner.logo_key)}
                           alt={partner.name}
-                          className="max-w-[85%] max-h-[85%] object-contain"
+                          className="h-full w-full object-contain p-4"
                         />
                       ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-400/10 to-amber-600/10 text-amber-700 font-bold text-3xl">
@@ -197,12 +197,12 @@ export default function PartnersPage() {
                 {filteredPartners.map((partner) => (
                   <div key={partner.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-all duration-300 hover:border-amber-200">
                     <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                      <div className="w-28 h-28 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-100 bg-gray-50/50 shadow-sm relative">
+                      <div className="w-28 h-28 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-100 bg-white shadow-sm relative">
                         {partner.logo_key ? (
                           <img
                             src={getPartnerLogoUrl(partner.logo_key)}
                             alt={partner.name}
-                            className="max-w-[85%] max-h-[85%] object-contain"
+                            className="h-full w-full object-contain p-4"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-400/10 to-amber-600/10 text-amber-700 font-bold text-4xl">

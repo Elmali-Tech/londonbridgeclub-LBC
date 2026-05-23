@@ -7,11 +7,11 @@ import { getS3PublicUrl } from '@/lib/awsConfig';
 interface Event {
   id: number;
   title: string;
-  description: string;
-  location: string;
+  description: string | null;
+  location: string | null;
   event_date: string;
-  event_time: string;
-  category: string;
+  event_time: string | null;
+  category: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
@@ -77,11 +77,11 @@ export default function EventDetailPage() {
         </div>
         <div className="p-6">
           <h1 className="text-2xl font-bold mb-2">{event.title}</h1>
-          <p className="text-gray-700 mb-2"><span className="font-semibold">Location:</span> {event.location}</p>
+          <p className="text-gray-700 mb-2"><span className="font-semibold">Location:</span> {event.location || 'TBA'}</p>
           <p className="text-gray-700 mb-2"><span className="font-semibold">Date:</span> {event.event_date}</p>
-          <p className="text-gray-700 mb-2"><span className="font-semibold">Time:</span> {event.event_time}</p>
-          <p className="text-gray-700 mb-2"><span className="font-semibold">Category:</span> {event.category}</p>
-          <p className="text-gray-700 mb-4"><span className="font-semibold">Description:</span> {event.description}</p>
+          <p className="text-gray-700 mb-2"><span className="font-semibold">Time:</span> {event.event_time || 'TBA'}</p>
+          <p className="text-gray-700 mb-2"><span className="font-semibold">Category:</span> {event.category || 'General'}</p>
+          <p className="text-gray-700 mb-4"><span className="font-semibold">Description:</span> {event.description || 'No description provided.'}</p>
           <div className="flex items-center text-gray-500 text-sm">
             <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -92,4 +92,4 @@ export default function EventDetailPage() {
       </div>
     </div>
   );
-} 
+}

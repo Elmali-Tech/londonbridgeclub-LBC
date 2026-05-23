@@ -70,6 +70,9 @@ type CRMFormData = {
   opportunity_title: string;
   opportunity_description: string;
   estimated_deal_size: string;
+  referral_source: string;
+  commission_rate: string;
+  lbc_commission: string;
   deal_stage: string;
   responsible_person: string;
   expected_closing_date: string;
@@ -128,6 +131,9 @@ export default function CustomerPoolPage() {
     opportunity_title: "",
     opportunity_description: "",
     estimated_deal_size: "",
+    referral_source: "",
+    commission_rate: "",
+    lbc_commission: "",
     deal_stage: "Lead",
     responsible_person: "",
     expected_closing_date: "",
@@ -350,6 +356,9 @@ export default function CustomerPoolPage() {
         opportunity_title: opp.opportunity_title,
         opportunity_description: opp.opportunity_description || "",
         estimated_deal_size: opp.estimated_deal_size || "",
+        referral_source: opp.referral_source || "",
+        commission_rate: opp.commission_rate || "",
+        lbc_commission: opp.lbc_commission || "",
         deal_stage: normalizeStageLabel(opp.deal_stage),
         responsible_person: opp.responsible_person || "",
         expected_closing_date: formattedDate,
@@ -393,6 +402,9 @@ export default function CustomerPoolPage() {
       opportunity_title: "",
       opportunity_description: "",
       estimated_deal_size: "",
+      referral_source: "",
+      commission_rate: "",
+      lbc_commission: "",
       deal_stage: "Lead",
       responsible_person: "",
       expected_closing_date: "",
@@ -407,7 +419,8 @@ export default function CustomerPoolPage() {
       const matchesSearch =
         opp.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         opp.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        opp.opportunity_title.toLowerCase().includes(searchTerm.toLowerCase());
+        opp.opportunity_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        Boolean(opp.referral_source?.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesStatus =
         statusFilter === "All" || opp.status === statusFilter;
@@ -597,12 +610,12 @@ export default function CustomerPoolPage() {
                            {opp.opportunity_title}
                         </h3>
                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+                            <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden relative flex-shrink-0 shadow-sm">
                                {getPartnerLogo(opp.company_name) ? (
                                  <img 
                                    src={getPartnerLogo(opp.company_name)!} 
                                    alt={opp.company_name} 
-                                   className="w-full h-full object-contain p-1.5"
+                                   className="h-full w-full object-contain p-2.5"
                                  />
                                ) : (
                                  <FiBriefcase className="text-amber-500" />
@@ -623,16 +636,38 @@ export default function CustomerPoolPage() {
                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
 	                           <p className="text-base md:text-lg font-black text-indigo-400 break-words leading-tight">{normalizeStageLabel(opp.deal_stage)}</p>
 	                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
+                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">LBC Commission</p>
+                           <p className="text-base md:text-lg font-black text-emerald-500 break-words leading-tight">{opp.lbc_commission || "N/A"}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
+                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Commission Rate</p>
+                           <p className="text-base md:text-lg font-black text-sky-500 break-words leading-tight">{opp.commission_rate || "N/A"}</p>
+                        </div>
 	                     </div>
 
                      <div className="space-y-4 pt-2">
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 dark:text-gray-300">
                            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500"><FiUser /></div>
                            <div>
-                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Stakeholder</p>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Full Identity</p>
                               <p>{opp.customer_name}</p>
                            </div>
                         </div>
+                        {(opp.referral_source || opp.lbc_commission || opp.commission_rate) && (
+                          <div className="flex items-start gap-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-500">
+                              <FiActivity />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Reference</p>
+                              <p>{opp.referral_source || "N/A"}</p>
+                              <p className="mt-1 text-xs text-gray-400">
+                                {opp.lbc_commission || "No commission"} {opp.commission_rate ? `· ${opp.commission_rate}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                        )}
 	                        {opp.opportunity_description && (
 	                           <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 italic text-xs font-medium text-slate-500 dark:text-slate-400">
                               &ldquo;{opp.opportunity_description}&rdquo;
@@ -736,12 +771,12 @@ export default function CustomerPoolPage() {
                                    }}
                                    className="w-full text-left px-6 py-4 hover:bg-amber-500/10 hover:text-amber-500 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
                                  >
-                                   <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                   <div className="w-10 h-10 rounded-lg bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden flex-shrink-0">
                                      {partner.logo_key ? (
                                        <img 
                                          src={getAssetPublicUrl(partner.logo_key)}
                                          alt="" 
-                                         className="w-full h-full object-contain p-1"
+                                         className="h-full w-full object-contain p-2"
                                        />
                                      ) : (
                                        <FiBriefcase className="text-amber-500 text-xs" />
@@ -754,6 +789,39 @@ export default function CustomerPoolPage() {
                            )}
                         </div>
                      ))}
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Reference Source</label>
+                        <input
+                           name="referral_source"
+                           placeholder="Who referred this lead?"
+                           value={formData.referral_source}
+                           onChange={handleInputChange}
+                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">LBC Commission</label>
+                        <input
+                           name="lbc_commission"
+                           placeholder="e.g. £5,000"
+                           value={formData.lbc_commission}
+                           onChange={handleInputChange}
+                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Commission Rate</label>
+                        <input
+                           name="commission_rate"
+                           placeholder="e.g. 10%"
+                           value={formData.commission_rate}
+                           onChange={handleInputChange}
+                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
                      
                      <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Pipeline Phase</label>

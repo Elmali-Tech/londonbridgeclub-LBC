@@ -12,11 +12,11 @@ import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiCalendar } from "
 interface Event {
   id: number;
   title: string;
-  description: string;
-  location: string;
+  description: string | null;
+  location: string | null;
   event_date: string;
-  event_time: string;
-  category: string;
+  event_time: string | null;
+  category: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
@@ -56,9 +56,9 @@ export default function AdminEventsPage() {
       });
       const data = await response.json();
       if (data.success) {
-        setEvents(data.events);
+        setEvents(Array.isArray(data.events) ? data.events : []);
       } else {
-        toast.error("Failed to fetch events");
+        toast.error(data.error || "Failed to fetch events");
       }
     } catch (error) {
       toast.error("Failed to fetch events");
@@ -153,6 +153,7 @@ export default function AdminEventsPage() {
     } else {
       setImagePreview(null);
     }
+    setSelectedImage(null);
     setShowCreateForm(true);
   };
 
@@ -190,6 +191,7 @@ export default function AdminEventsPage() {
   const filteredEvents = events.filter(ev => 
     ev.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     ev.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    ev.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     ev.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

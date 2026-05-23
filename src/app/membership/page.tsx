@@ -52,6 +52,8 @@ export default function MembershipPage() {
   const [selectedCategory, setSelectedCategory] = useState<"individual" | "corporate">("individual");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
+  const isApprovedForPayment = !user || user.is_approved || user.role === "admin";
+
   useEffect(() => {
     if (!authLoading && user?.status) {
       setSelectedCategory(user.status === "corporate" ? "corporate" : "individual");
@@ -88,6 +90,11 @@ export default function MembershipPage() {
   const handleSubscribe = async (plan: PlanWithFeatures) => {
     if (!user) {
       router.push("/login");
+      return;
+    }
+
+    if (!isApprovedForPayment) {
+      alert("Your application is currently pending approval. You will receive an email when payment is available.");
       return;
     }
 
@@ -254,13 +261,22 @@ export default function MembershipPage() {
                       : "text-[#5e574b] hover:text-[#11100e]"
                   }`}
                 >
-                  Annual
+                  Annual (12 months)
                 </button>
               </div>
             </div>
           </div>
 
-          {user && (
+          {user && !isApprovedForPayment && (
+            <div className="mt-8 rounded-md border border-[#d8b861]/45 bg-white/75 p-5">
+              <h3 className="text-sm font-semibold text-[#11100e]">Application Pending Approval</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5e574b]">
+                Your application has been sent for approval. Once approved, you will receive an email with a payment link.
+              </p>
+            </div>
+          )}
+
+          {user && isApprovedForPayment && (
             <div className="mt-8 rounded-md border border-[#d8b861]/45 bg-white/75 p-5">
               <h3 className="text-sm font-semibold text-[#11100e]">Membership Required</h3>
               <p className="mt-2 text-sm leading-6 text-[#5e574b]">
@@ -338,6 +354,11 @@ export default function MembershipPage() {
                             Save £{saving.toLocaleString()} vs monthly
                           </p>
                         )}
+                        {billingCycle === "yearly" && (
+                          <p className={`mt-3 text-xs ${plan.highlighted ? "text-white/46" : "text-[#7b746b]"}`}>
+                            Billed once per year for 12 months of access
+                          </p>
+                        )}
                         {billingCycle === "monthly" && (
                           <p className={`mt-3 text-xs ${plan.highlighted ? "text-white/46" : "text-[#7b746b]"}`}>
                             or £{plan.yearly_price.toLocaleString()}/year
@@ -389,7 +410,7 @@ export default function MembershipPage() {
 
                       <button
                         onClick={() => handleSubscribe(plan)}
-                        disabled={isLoading}
+                        disabled={isLoading || !!user && !isApprovedForPayment || !hasStripeId}
                         className={`mt-auto h-12 rounded px-6 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                           plan.highlighted
                             ? "bg-[#d8b861] text-black hover:bg-[#f0d27b]"
@@ -400,6 +421,8 @@ export default function MembershipPage() {
                           ? "Processing..."
                           : !hasStripeId
                             ? "Coming soon"
+                            : user && !isApprovedForPayment
+                              ? "Pending approval"
                             : user
                               ? "Subscribe now"
                               : "Login to subscribe"}

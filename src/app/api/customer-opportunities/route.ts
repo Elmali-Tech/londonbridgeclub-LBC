@@ -92,6 +92,9 @@ export async function POST(request: Request) {
       opportunity_title,
       opportunity_description,
       estimated_deal_size,
+      referral_source,
+      commission_rate,
+      lbc_commission,
       deal_stage,
       responsible_person,
       expected_closing_date,
@@ -121,6 +124,9 @@ export async function POST(request: Request) {
           opportunity_title,
           opportunity_description: opportunity_description || null,
           estimated_deal_size: estimated_deal_size || null,
+          referral_source: referral_source || null,
+          commission_rate: commission_rate || null,
+          lbc_commission: lbc_commission || null,
           deal_stage: normalizeDealStage(deal_stage),
           responsible_person: responsible_person || null,
           expected_closing_date: formattedDate,
@@ -149,6 +155,9 @@ export async function POST(request: Request) {
         - Company: ${company_name}
         - Opportunity: ${opportunity_title}
         - Estimated Size: ${estimated_deal_size || 'N/A'}
+        - Referral Source: ${referral_source || 'N/A'}
+        - LBC Commission: ${lbc_commission || 'N/A'}
+        - Commission Rate: ${commission_rate || 'N/A'}
         - Stage: ${deal_stage}
         - Responsible: ${responsible_person || 'Unassigned'}
       `);

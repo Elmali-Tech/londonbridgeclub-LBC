@@ -15,7 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://londonbridge.club";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: "London Bridge Club",
   description: "Join our exclusive community of professionals",
   keywords: ["club", "professional network", "business", "London", "membership"],
@@ -29,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "London Bridge Club",
     description: "Join our exclusive community of professionals",
-    url: "https://londonbridgeclub.com",
+    url: baseUrl,
     siteName: "London Bridge Club",
     locale: "en_GB",
     type: "website",

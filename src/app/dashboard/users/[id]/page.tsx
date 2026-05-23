@@ -2,18 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter, usePathname } from 'next/navigation';
-import UserProfile from '@/app/components/profile/UserProfile';
-import { SubscriptionStatus, updateSubscriptionStatus } from '@/lib/subscriptionUtils';
-import ImageUpload from '@/app/components/profile/ImageUpload';
+import { useParams, useRouter } from 'next/navigation';
 import PostCard, { Post as PostType } from '@/app/components/dashboard/PostCard';
 import { toast } from 'react-hot-toast';
-import Loading from '@/app/components/ui/Loading';
-import { supabase } from '@/lib/supabase';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 import Image from 'next/image';
 import { Plus, CheckCircle } from 'lucide-react';
 import { getAssetPublicUrl } from '@/lib/storage';
+import Cookies from 'js-cookie';
 
 interface UserProfileData {
   id: number;
@@ -70,7 +66,7 @@ interface PostApiResponse {
 
 export default function UserProfilePage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const params = useParams();
   const { user } = useAuth();
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [posts, setPosts] = useState<PostType[]>([]);
@@ -81,11 +77,7 @@ export default function UserProfilePage() {
     goals: [],
     interests: []
   });
-  const [loadingTags, setLoadingTags] = useState(false);
-  
-  // Get userId from pathname
-  const pathParts = pathname.split('/');
-  const userId = pathParts[pathParts.length - 1];
+  const userId = params?.id as string;
   
   // Check if viewing own profile
   const isCurrentUser = user ? String(user.id) === userId : false;
@@ -104,7 +96,7 @@ export default function UserProfilePage() {
       
       try {
         setLoading(true);
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('authToken') || Cookies.get('authToken');
         
         if (!token) {
           throw new Error('Session not found. Please log in again.');
@@ -172,8 +164,7 @@ export default function UserProfilePage() {
       if (!userId) return;
       
       try {
-        setLoadingTags(true);
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('authToken') || Cookies.get('authToken');
         
         if (!token) {
           throw new Error('Session not found. Please log in again.');
@@ -197,8 +188,6 @@ export default function UserProfilePage() {
       } catch (err) {
         console.error('Error loading tags:', err);
         // Don't show error toast for tags, just log it
-      } finally {
-        setLoadingTags(false);
       }
     };
 
@@ -210,7 +199,7 @@ export default function UserProfilePage() {
     if (!user) return;
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken') || Cookies.get('authToken');
       
       if (!token) {
         throw new Error('Session not found. Please log in again.');
@@ -253,7 +242,7 @@ export default function UserProfilePage() {
     if (!user) return;
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken') || Cookies.get('authToken');
       
       if (!token) {
         throw new Error('Session not found. Please log in again.');
@@ -302,7 +291,7 @@ export default function UserProfilePage() {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken') || Cookies.get('authToken');
       
       if (!token) {
         throw new Error('Session not found. Please log in again.');
@@ -341,7 +330,7 @@ export default function UserProfilePage() {
   // Handle like for posts
   const handleLikePost = async (postId: number, isLiked: boolean) => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken') || Cookies.get('authToken');
       
       if (!token) {
         throw new Error('Session not found. Please log in again.');
@@ -658,6 +647,11 @@ export default function UserProfilePage() {
                     <span className="text-xs font-black text-gray-600 uppercase group-hover:text-black transition-colors">Professional Site</span>
                   </a>
                 )}
+                {!profileData.linkedin_url && !profileData.website_url && (
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    No public links yet
+                  </p>
+                )}
               </div>
             </div>
 
@@ -680,4 +674,4 @@ export default function UserProfilePage() {
       </div>
     </DashboardContainer>
   );
-} 
+}
