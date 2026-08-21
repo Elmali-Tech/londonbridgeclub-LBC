@@ -166,11 +166,12 @@ export default function CustomerPoolPage() {
 
   const fetchPartners = async () => {
     try {
-      const { data, error } = await supabase
-        .from('partners')
-        .select('name, logo_key');
-      if (error) throw error;
-      if (data) setPartners(data);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/admin/partners", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) setPartners(data.partners || []);
     } catch (error) {
       console.error('Error fetching partners:', error);
     }
@@ -269,11 +270,16 @@ export default function CustomerPoolPage() {
       // Synchronize with Partners table
       const partnerExists = partners.some(p => p.name.toLowerCase() === formData.company_name.trim().toLowerCase());
       if (!partnerExists && formData.company_name.trim()) {
-        await supabase.from('partners').insert({
-          name: formData.company_name.trim(),
-          description: `Strategic affiliate synchronized from CRM Pipeline (Primary Contact: ${formData.contact_person || 'N/A'})`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+        await fetch("/api/admin/partners", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: formData.company_name.trim(),
+            description: `Strategic affiliate synchronized from CRM Pipeline (Primary Contact: ${formData.contact_person || 'N/A'})`,
+          }),
         });
         fetchPartners();
       }

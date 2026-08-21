@@ -4,28 +4,67 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Partner } from "@/types/database";
+import { Partner, PartnerCategory, WorkflowStatus } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { AllowedFileTypes } from "@/lib/awsConfig";
 import { getAssetPublicUrl } from "@/lib/storage";
 import Image from "next/image";
-import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiBriefcase, FiLink } from "react-icons/fi";
+import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiBriefcase, FiLink, FiSend, FiCheckCircle, FiRotateCcw, FiArchive } from "react-icons/fi";
+
+const PARTNER_CATEGORIES: PartnerCategory[] = [
+  "Loyalty", "Meal Cards", "Fuel", "Travel", "Insurance", "Technology",
+  "Artificial Intelligence", "Digital Marketing", "PR", "Media",
+  "Electricity", "Logistics", "Finance", "Healthcare",
+];
+
+const STATUS_TABS: { label: string; value: WorkflowStatus | "all" }[] = [
+  { label: "All", value: "all" },
+  { label: "Draft", value: "draft" },
+  { label: "Pending Review", value: "pending_review" },
+  { label: "Revision Requested", value: "revision_requested" },
+  { label: "Published", value: "published" },
+  { label: "Archived", value: "archived" },
+];
+
+const STATUS_BADGE_STYLES: Record<WorkflowStatus, string> = {
+  draft: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700",
+  pending_review: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800",
+  revision_requested: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800",
+  published: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800",
+  archived: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700",
+};
+
+const STATUS_LABELS: Record<WorkflowStatus, string> = {
+  draft: "Draft",
+  pending_review: "Pending Review",
+  revision_requested: "Revision Requested",
+  published: "Published",
+  archived: "Archived",
+};
+
+type StaffOption = { id: number; full_name: string };
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [staff, setStaff] = useState<StaffOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
-  
+
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
-  
+  const [statusTab, setStatusTab] = useState<WorkflowStatus | "all">("all");
+  const [actioningId, setActioningId] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     website_url: "",
+    category: "" as PartnerCategory | "",
+    subcategory: "",
+    responsible_person: "" as number | "",
     logo: null as File | null,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -37,8 +76,14 @@ export default function PartnersPage() {
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
+  const isAdmin = userRole === "admin";
   const getPartnerLogoUrl = (logoKey?: string | null) =>
     logoKey ? getAssetPublicUrl(logoKey) : "";
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("authToken");
+    return { Authorization: `Bearer ${token}` };
+  };
 
   useEffect(() => {
     if (!isLoadingAuth && !hasAccess && user) {
@@ -49,6 +94,7 @@ export default function PartnersPage() {
   useEffect(() => {
     fetchPartners();
     fetchOpportunities();
+    fetchStaff();
   }, []);
 
   const fetchOpportunities = async () => {
@@ -60,19 +106,27 @@ export default function PartnersPage() {
     }
   };
 
+  const fetchStaff = async () => {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('role', ['admin', 'opportunity_manager', 'sales_member'])
+        .order('full_name', { ascending: true });
+      if (data) setStaff(data);
+    } catch (error) {
+      console.error('Error fetching staff:', error);
+    }
+  };
+
   const fetchPartners = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from("partners")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/admin/partners", { headers: authHeaders() });
+      const data = await response.json();
 
-      if (error) {
-        throw error;
-      }
-
-      setPartners(data || []);
+      if (!data.success) throw new Error(data.error || "Failed to fetch partners");
+      setPartners(data.partners || []);
     } catch (error) {
       console.error("Error fetching partners:", error);
       toast.error("An error occurred while loading partner companies");
@@ -84,8 +138,9 @@ export default function PartnersPage() {
   const filteredPartners = partners.filter((partner) => {
     const searchLower = searchTerm.toLowerCase();
     return (
-      partner.name.toLowerCase().includes(searchLower) ||
-      (partner.description && partner.description.toLowerCase().includes(searchLower))
+      (statusTab === "all" || partner.status === statusTab) &&
+      (partner.name.toLowerCase().includes(searchLower) ||
+        (partner.description && partner.description.toLowerCase().includes(searchLower)))
     );
   });
 
@@ -97,6 +152,9 @@ export default function PartnersPage() {
         name: partner.name,
         description: partner.description,
         website_url: partner.website_url || "",
+        category: partner.category || "",
+        subcategory: partner.subcategory || "",
+        responsible_person: partner.responsible_person || "",
         logo: null,
       });
       setLogoPreview(getPartnerLogoUrl(partner.logo_key) || null);
@@ -107,6 +165,9 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        category: "",
+        subcategory: "",
+        responsible_person: "",
         logo: null,
       });
       setLogoPreview(null);
@@ -122,13 +183,16 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        category: "",
+        subcategory: "",
+        responsible_person: "",
         logo: null,
       });
     }, 300);
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -164,13 +228,9 @@ export default function PartnersPage() {
       formData.append("file", file);
       formData.append("fileType", "PARTNERS_LOGOS");
 
-      const token = localStorage.getItem("authToken");
-
       const response = await fetch("/api/upload/storage", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: authHeaders(),
         body: formData,
       });
 
@@ -204,61 +264,45 @@ export default function PartnersPage() {
         const uploadedKey = await uploadLogo(formData.logo);
         if (uploadedKey) {
           if (isEditMode && selectedPartner?.logo_key) {
-            const token = localStorage.getItem("authToken");
             await fetch(
               `/api/upload/storage?key=${encodeURIComponent(selectedPartner.logo_key)}`,
-              {
-                method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              },
+              { method: "DELETE", headers: authHeaders() },
             );
           }
           logo_key = uploadedKey;
         }
       }
 
-      if (isEditMode && selectedPartner) {
-        const { error } = await supabase
-          .from("partners")
-          .update({
-            name: formData.name,
-            description: formData.description,
-            website_url: formData.website_url || null,
-            logo_key,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", selectedPartner.id);
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        website_url: formData.website_url || null,
+        logo_key,
+        category: formData.category || null,
+        subcategory: formData.subcategory || null,
+        responsible_person: formData.responsible_person || null,
+      };
 
-        if (error) throw error;
-        toast.success("Partner company updated successfully");
-      } else {
-        const { error } = await supabase.from("partners").insert({
-          name: formData.name,
-          description: formData.description,
-          website_url: formData.website_url || null,
-          logo_key,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+      const url = isEditMode && selectedPartner ? `/api/admin/partners/${selectedPartner.id}` : "/api/admin/partners";
+      const method = isEditMode && selectedPartner ? "PUT" : "POST";
 
-        if (error) throw error;
-        toast.success("Partner company added successfully");
-      }
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to save partner");
+
+      toast.success(isEditMode ? "Partner company updated successfully" : "Partner company added as a draft");
 
       handleCloseModal();
       fetchPartners();
 
-      // Send system notification
       try {
-        const token = localStorage.getItem("authToken");
         await fetch("/api/send-mail/system-notification", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             action: isEditMode ? "Partner Updated" : "Partner Registered",
             details: `Partner "${formData.name}" has been ${isEditMode ? "updated" : "onboarded"}. (By: ${user?.full_name})`
@@ -284,19 +328,17 @@ export default function PartnersPage() {
       setIsSubmitting(true);
       const partnerToDelete = partners.find((p) => p.id === id);
 
-      const { error } = await supabase.from("partners").delete().eq("id", id);
-      if (error) throw error;
+      const response = await fetch(`/api/admin/partners/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to delete partner");
 
       if (partnerToDelete?.logo_key) {
-        const token = localStorage.getItem("authToken");
         await fetch(
           `/api/upload/storage?key=${encodeURIComponent(partnerToDelete.logo_key)}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
+          { method: "DELETE", headers: authHeaders() },
         );
       }
 
@@ -304,15 +346,10 @@ export default function PartnersPage() {
       setDeleteConfirmId(null);
       toast.success("Partner company deleted successfully");
 
-      // Send system notification
       try {
-        const token = localStorage.getItem("authToken");
         await fetch("/api/send-mail/system-notification", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             action: "Partner Deleted",
             details: `Partner "${partnerToDelete?.name}" (ID: ${id}) has been removed. (By: ${user?.full_name})`
@@ -327,6 +364,97 @@ export default function PartnersPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const runWorkflowAction = async (
+    partnerId: number,
+    action: "submit" | "approve" | "request-revision" | "archive",
+    body?: Record<string, unknown>
+  ) => {
+    try {
+      setActioningId(partnerId);
+      const response = await fetch(`/api/admin/partners/${partnerId}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Action failed");
+
+      const messages: Record<typeof action, string> = {
+        submit: "Submitted for review",
+        approve: "Approved & published",
+        "request-revision": "Revision requested",
+        archive: "Partner archived",
+      };
+      toast.success(messages[action]);
+      fetchPartners();
+    } catch (error: any) {
+      toast.error(error.message || "Action failed");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleSubmitForReview = (partnerId: number) => runWorkflowAction(partnerId, "submit");
+
+  const handleApprove = (partnerId: number) => runWorkflowAction(partnerId, "approve");
+
+  const handleRequestRevision = (partnerId: number) => {
+    const notes = window.prompt("What needs to change before this can be published?");
+    if (!notes || !notes.trim()) return;
+    runWorkflowAction(partnerId, "request-revision", { notes: notes.trim() });
+  };
+
+  const handleArchive = (partnerId: number) => runWorkflowAction(partnerId, "archive");
+
+  const getResponsibleName = (id?: number | null) => staff.find((s) => s.id === id)?.full_name;
+
+  const renderWorkflowActions = (partner: Partner, size: "sm" | "xs" = "sm") => {
+    const textSize = size === "sm" ? "text-xs" : "text-[11px]";
+    const iconSize = size === "sm" ? "w-3.5 h-3.5" : "w-3 h-3";
+    const pad = size === "sm" ? "px-3 py-1.5" : "px-2.5 py-1.5";
+    return (
+      <>
+        {(partner.status === "draft" || partner.status === "revision_requested") && (
+          <button
+            onClick={() => handleSubmitForReview(partner.id)}
+            disabled={actioningId === partner.id}
+            className={`flex items-center gap-1.5 ${pad} ${textSize} font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50`}
+          >
+            <FiSend className={iconSize} /> Submit
+          </button>
+        )}
+        {partner.status === "pending_review" && isAdmin && (
+          <>
+            <button
+              onClick={() => handleApprove(partner.id)}
+              disabled={actioningId === partner.id}
+              className={`flex items-center gap-1.5 ${pad} ${textSize} font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50`}
+            >
+              <FiCheckCircle className={iconSize} /> Approve
+            </button>
+            <button
+              onClick={() => handleRequestRevision(partner.id)}
+              disabled={actioningId === partner.id}
+              className={`flex items-center gap-1.5 ${pad} ${textSize} font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg transition-colors disabled:opacity-50`}
+            >
+              <FiRotateCcw className={iconSize} /> Revise
+            </button>
+          </>
+        )}
+        {partner.status === "published" && isAdmin && (
+          <button
+            onClick={() => handleArchive(partner.id)}
+            disabled={actioningId === partner.id}
+            className={`flex items-center gap-1.5 ${pad} ${textSize} font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 rounded-lg transition-colors disabled:opacity-50`}
+          >
+            <FiArchive className={iconSize} /> Archive
+          </button>
+        )}
+      </>
+    );
   };
 
   if (isLoadingAuth) {
@@ -347,7 +475,7 @@ export default function PartnersPage() {
             Manage your B2B corporate network and official affiliates.
           </p>
         </div>
-        
+
         <div className="flex flex-wrap items-center justify-end gap-3 flex-1">
           <div className="relative w-full sm:max-w-xs lg:w-64 shrink-0">
             <input
@@ -388,12 +516,31 @@ export default function PartnersPage() {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-wrap gap-2">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setStatusTab(tab.value)}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${
+              statusTab === tab.value
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {isModalOpen && (
         <div className="mb-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <FiBriefcase className="text-blue-600" /> {isEditMode ? "Modify Partner" : "Onboard Corporate Partner"}
             </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {isEditMode ? "Editing does not change its review status." : "New partners start as a Draft. Submit for review once ready."}
+            </p>
           </div>
           <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6" encType="multipart/form-data">
             <div className="space-y-1.5 md:col-span-2">
@@ -407,7 +554,48 @@ export default function PartnersPage() {
                 required
               />
             </div>
-            
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Category</label>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">Uncategorized</option>
+                {PARTNER_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Subcategory</label>
+              <input
+                name="subcategory"
+                value={formData.subcategory}
+                onChange={handleInputChange}
+                placeholder="Optional, free text"
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Responsible Person</label>
+              <select
+                name="responsible_person"
+                value={formData.responsible_person}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">Unassigned</option>
+                {staff.map((person) => (
+                  <option key={person.id} value={person.id}>{person.full_name}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Homepage Domain (URL)</label>
               <input
@@ -432,7 +620,7 @@ export default function PartnersPage() {
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
-            
+
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Brand Vector / Imagery</label>
               <div className="flex items-center justify-center w-full">
@@ -451,7 +639,7 @@ export default function PartnersPage() {
                 </div>
               )}
             </div>
-            
+
             <div className="flex items-center gap-3 md:col-span-2 pt-4 border-t border-gray-100 dark:border-gray-800">
               <button
                 type="submit"
@@ -487,16 +675,16 @@ export default function PartnersPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPartners.map((partner) => (
             <div key={partner.id} className="group flex flex-col bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden hover:shadow-md hover:border-blue-200 dark:hover:border-blue-700/50 transition-all duration-300">
-              
+
               <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-start gap-4 mb-5">
                   <div className="w-20 h-20 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden flex-shrink-0 relative shadow-sm">
                     {partner.logo_key ? (
-                      <Image 
+                      <Image
                         src={getPartnerLogoUrl(partner.logo_key)}
-                        alt={partner.name} 
-                        fill 
-                        className="object-contain p-2" 
+                        alt={partner.name}
+                        fill
+                        className="object-contain p-2"
                       />
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent flex items-center justify-center">
@@ -504,7 +692,7 @@ export default function PartnersPage() {
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                      <h3 className="text-lg font-black tracking-tight text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-2 leading-tight mb-1">{partner.name}</h3>
                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         {partner.website_url ? (
@@ -518,33 +706,57 @@ export default function PartnersPage() {
                           {opportunities.filter(o => o.company_name?.toLowerCase() === partner.name.toLowerCase()).length} Prospects
                         </span>
                      </div>
+                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${STATUS_BADGE_STYLES[partner.status]}`}>
+                          {STATUS_LABELS[partner.status]}
+                        </span>
+                        {partner.category && (
+                          <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400">
+                            {partner.category}
+                          </span>
+                        )}
+                     </div>
+                     {getResponsibleName(partner.responsible_person) && (
+                       <p className="text-[11px] text-gray-400 mt-1.5">Owner: {getResponsibleName(partner.responsible_person)}</p>
+                     )}
                   </div>
                 </div>
-                
+
                 <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed flex-1">
                   {partner.description}
                 </p>
 
-                <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    Partner ID: {partner.id}
-                  </span>
-                  
-                  {deleteConfirmId === partner.id ? (
-                    <div className="flex items-center gap-2">
-                       <button onClick={() => setDeleteConfirmId(null)} className="px-3 py-1.5 text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
-                       <button onClick={() => handleDeletePartner(partner.id)} disabled={isSubmitting} className="px-3 py-1.5 text-xs font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50">Confirm</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleOpenModal(partner)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                        <FiEdit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setDeleteConfirmId(partner.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                        <FiTrash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                {partner.status === "revision_requested" && partner.revision_notes && (
+                  <div className="mt-3 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-lg text-xs text-amber-800 dark:text-amber-400">
+                    <strong>Revision needed:</strong> {partner.revision_notes}
+                  </div>
+                )}
+
+                <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      Partner ID: {partner.id}
+                    </span>
+
+                    {deleteConfirmId === partner.id ? (
+                      <div className="flex items-center gap-2">
+                         <button onClick={() => setDeleteConfirmId(null)} className="px-3 py-1.5 text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+                         <button onClick={() => handleDeletePartner(partner.id)} disabled={isSubmitting} className="px-3 py-1.5 text-xs font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50">Confirm</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleOpenModal(partner)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <FiEdit2 className="w-4 h-4" />
+                        </button>
+                        {isAdmin && (
+                          <button onClick={() => setDeleteConfirmId(partner.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">{renderWorkflowActions(partner)}</div>
                 </div>
               </div>
             </div>
@@ -558,6 +770,7 @@ export default function PartnersPage() {
                 <tr>
                   <th className="px-6 py-4 font-bold">Brand Entity</th>
                   <th className="px-6 py-4 font-bold">Core Profile</th>
+                  <th className="px-6 py-4 font-bold">Status</th>
                   <th className="px-6 py-4 font-bold text-right">Actions</th>
                 </tr>
               </thead>
@@ -568,11 +781,11 @@ export default function PartnersPage() {
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden relative flex-shrink-0 shadow-sm">
                           {partner.logo_key ? (
-                            <Image 
+                            <Image
                                src={getPartnerLogoUrl(partner.logo_key)}
-                               alt={partner.name} 
-                               fill 
-                               className="object-contain p-1.5" 
+                               alt={partner.name}
+                               fill
+                               className="object-contain p-1.5"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-blue-500/5">
@@ -592,6 +805,18 @@ export default function PartnersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium max-w-sm">
                        <p className="line-clamp-2 leading-relaxed">{partner.description}</p>
+                       {partner.category && <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-1">{partner.category}{partner.subcategory ? ` • ${partner.subcategory}` : ""}</p>}
+                       {getResponsibleName(partner.responsible_person) && (
+                         <p className="text-[11px] text-gray-400 mt-1">Owner: {getResponsibleName(partner.responsible_person)}</p>
+                       )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ${STATUS_BADGE_STYLES[partner.status]}`}>
+                        {STATUS_LABELS[partner.status]}
+                      </span>
+                      {partner.status === "revision_requested" && partner.revision_notes && (
+                        <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 max-w-[200px]">{partner.revision_notes}</p>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                        {deleteConfirmId === partner.id ? (
@@ -600,13 +825,16 @@ export default function PartnersPage() {
                              <button onClick={() => handleDeletePartner(partner.id)} disabled={isSubmitting} className="px-3 py-1.5 text-xs font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50">Confirm</button>
                           </div>
                        ) : (
-                          <div className="flex items-center justify-end gap-2">
-                             <button onClick={() => handleOpenModal(partner)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {renderWorkflowActions(partner, "xs")}
+                            <button onClick={() => handleOpenModal(partner)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                               <FiEdit2 className="w-4 h-4" />
                             </button>
-                            <button onClick={() => setDeleteConfirmId(partner.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                              <FiTrash2 className="w-4 h-4" />
-                            </button>
+                            {isAdmin && (
+                              <button onClick={() => setDeleteConfirmId(partner.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                        )}
                     </td>
