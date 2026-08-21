@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireAdmin, requireRole } from '@/lib/permissions';
 
 type Params = { params: Promise<{ id: string }> };
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { data: partner, error } = await supabase
       .from('partners')
       .select('*')
@@ -42,6 +43,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, error: 'Name and description are required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: partner, error } = await supabase
       .from('partners')
       .update({
@@ -77,6 +79,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { error } = await supabase.from('partners').delete().eq('id', id);
 
     if (error) {
