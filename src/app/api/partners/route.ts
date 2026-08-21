@@ -55,6 +55,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('partners')
       .select('id, name, website_url, logo_key, created_at')
+      .eq('status', 'published')
       .not('logo_key', 'is', null)
       .neq('logo_key', '')
       .order('created_at', { ascending: false });
