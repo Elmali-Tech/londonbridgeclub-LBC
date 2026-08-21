@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { validateSession } from "@/lib/auth";
 import { sendSystemNotification } from "@/lib/nodemailer";
+import { requireAdmin } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session || (session.role !== "admin" && !session.is_admin)) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const { action, details } = await request.json();
 
