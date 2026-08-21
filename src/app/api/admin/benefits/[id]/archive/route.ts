@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/permissions';
 
 // POST - Admin archives a published benefit, taking it off the live listing
@@ -9,6 +9,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { data: existing, error: fetchError } = await supabase
       .from('benefits')
       .select('id, status')
