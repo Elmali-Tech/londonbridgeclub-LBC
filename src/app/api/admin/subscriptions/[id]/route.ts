@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { stripe } from '@/lib/stripe';
 import { createClient } from '@/lib/supabase';
 
@@ -7,10 +7,8 @@ type Params = { params: Promise<{ id: string }> };
 
 // PUT /api/admin/subscriptions/[id] — plan_type veya status güncelle
 export async function PUT(req: NextRequest, { params }: Params) {
-  const user = await validateSession(req);
-  if (!user?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (auth.response) return auth.response;
 
   const { id } = await params;
   const body = await req.json();
@@ -29,10 +27,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // DELETE /api/admin/subscriptions/[id] — Stripe'da iptal et
 export async function DELETE(req: NextRequest, { params }: Params) {
-  const user = await validateSession(req);
-  if (!user?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (auth.response) return auth.response;
 
   const { id } = await params;
   const supabase = createClient();
