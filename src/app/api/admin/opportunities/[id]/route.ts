@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/lbc-data";
 import { validateSession } from "@/lib/auth";
-import { uploadBufferToSupabaseStorage } from "@/lib/storageUploadUtils";
+import { uploadBufferToAssetStorage } from "@/lib/storageUploadUtils";
 
 type OpportunityUpdateData = {
   title: string;
@@ -81,18 +81,18 @@ export async function PUT(
       // Generate unique file name
       const ext = imageFile.name.split(".").pop();
       const fileName = `opportunities/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadResult = await uploadBufferToSupabaseStorage(
+      const uploadResult = await uploadBufferToAssetStorage(
         fileName,
         Buffer.from(await imageFile.arrayBuffer()),
         imageFile.type,
       );
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || "Supabase Storage upload failed");
+        throw new Error(uploadResult.error || "Asset storage upload failed");
       }
       image_key = fileName;
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     const updateData: OpportunityUpdateData = {
       title,
@@ -111,7 +111,7 @@ export async function PUT(
       updateData.image_key = image_key;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from("opportunities")
       .update(updateData)
       .eq("id", id)
@@ -156,8 +156,8 @@ export async function DELETE(
       );
     }
 
-    const supabase = createClient();
-    const { error } = await supabase
+    const lbcData = createClient();
+    const { error } = await lbcData
       .from("opportunities")
       .delete()
       .eq("id", id);

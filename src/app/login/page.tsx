@@ -64,7 +64,12 @@ export default function Login() {
         }
         
         try {
-          const subscriptionStatus = await fetchSubscriptionStatus(user.id);
+          const subscriptionStatus =
+            user.auth_provider === "lbc"
+              ? user.subscription_status === "active"
+                ? "active"
+                : "inactive"
+              : await fetchSubscriptionStatus(user.id);
 
           if (subscriptionStatus === "active") {
             router.push("/dashboard"); // User has subscription, go to dashboard

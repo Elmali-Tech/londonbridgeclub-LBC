@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(req: NextRequest) {
   const user = await validateSession(req);
@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const lbcData = createClient();
+  const { data, error } = await lbcData
     .from('membership_plans')
     .select('*')
     .order('sort_order', { ascending: true });
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const lbcData = createClient();
+  const { data, error } = await lbcData
     .from('membership_plans')
     .insert({
       name, slug, category, description,

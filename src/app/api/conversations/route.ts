@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // GET - Kullanıcının tüm konuşmalarını getir
 export async function GET(request: NextRequest) {
@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Kullanıcının katıldığı tüm konuşmaları getir
-    const { data: conversations, error } = await supabase
+    const { data: conversations, error } = await lbcData
       .from('conversations')
       .select(`
         *,
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     ];
 
     // Katılımcı kullanıcı bilgilerini TEK sorguda getir
-    const { data: allParticipantUsers } = await supabase
+    const { data: allParticipantUsers } = await lbcData
       .from('users')
       .select('id, full_name, headline, profile_image_key')
       .in('id', allParticipantUserIds);
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     (allParticipantUsers || []).forEach(u => { participantUserMap[u.id] = u; });
 
     // Bu kullanıcının okuduğu mesajları TEK sorguda getir
-    const { data: readMessageIds } = await supabase
+    const { data: readMessageIds } = await lbcData
       .from('message_reads')
       .select('message_id')
       .eq('user_id', user.id);
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     const readSet = new Set((readMessageIds || []).map((r: any) => r.message_id));
 
     // Tüm konuşmalardaki okunmamış mesajları TEK sorguda getir
-    const { data: allUnreadMessages } = await supabase
+    const { data: allUnreadMessages } = await lbcData
       .from('messages')
       .select('id, conversation_id')
       .in('conversation_id', conversationIds)
@@ -147,14 +147,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Eğer grup değilse ve sadece iki kişi varsa, mevcut konuşmayı kontrol et
     if (!is_group && participant_ids.length === 1) {
       const otherUserId = participant_ids[0];
       
       // Mevcut konuşmayı bul
-      const { data: existingConv } = await supabase.rpc('get_or_create_conversation', {
+      const { data: existingConv } = await lbcData.rpc('get_or_create_conversation', {
         user1_id: user.id,
         user2_id: otherUserId
       });
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Yeni konuşma oluştur
-    const { data: conversation, error: convError } = await supabase
+    const { data: conversation, error: convError } = await lbcData
       .from('conversations')
       .insert({
         is_group,
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
       is_admin: userId === user.id // Creator admin olur
     }));
 
-    const { error: participantError } = await supabase
+    const { error: participantError } = await lbcData
       .from('conversation_participants')
       .insert(participantInserts);
 
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
 
     // Eğer başlangıç mesajı varsa ekle
     if (initial_message) {
-      const { error: messageError } = await supabase
+      const { error: messageError } = await lbcData
         .from('messages')
         .insert({
           conversation_id: conversation.id,

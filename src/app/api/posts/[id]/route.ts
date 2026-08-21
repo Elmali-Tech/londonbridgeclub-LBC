@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // DELETE API for deleting a post
 export async function DELETE(request: NextRequest) {
@@ -23,11 +23,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the post exists and belongs to the user
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .select('id, user_id')
       .eq('id', postId)
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // First delete associated media (if any)
-    const { error: mediaDeleteError } = await supabase
+    const { error: mediaDeleteError } = await lbcData
       .from('post_media')
       .delete()
       .eq('post_id', postId);
@@ -60,7 +60,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Also delete any likes associated with this post
-    const { error: likesDeleteError } = await supabase
+    const { error: likesDeleteError } = await lbcData
       .from('post_likes')
       .delete()
       .eq('post_id', postId);
@@ -71,7 +71,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete comments associated with this post
-    const { error: commentsDeleteError } = await supabase
+    const { error: commentsDeleteError } = await lbcData
       .from('comments')
       .delete()
       .eq('post_id', postId);
@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the post itself
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await lbcData
       .from('posts')
       .delete()
       .eq('id', postId)

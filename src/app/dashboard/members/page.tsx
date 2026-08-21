@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { User } from "@/types/database";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   SubscriptionStatus,
@@ -9,16 +9,45 @@ import {
 } from "@/lib/subscriptionUtils";
 import DashboardContainer from "@/app/components/dashboard/DashboardContainer";
 import { toast } from "react-hot-toast";
-import { FiPlus } from "react-icons/fi";
+import { FiMessageCircle, FiPlus } from "react-icons/fi";
 import { getAssetPublicUrl } from "@/lib/storage";
 
-// Extended User interface for follow status
-interface UserWithFollowStatus extends User {
+type MemberStatus = "personal" | "corporate";
+
+interface UserWithFollowStatus {
+  id: number | string;
+  internal_user_id?: number | null;
+  full_name: string;
+  email: string;
+  headline?: string | null;
+  profile_image_key?: string | null;
+  created_at: string;
+  status: MemberStatus;
+  location?: string | null;
+  industry?: string | null;
+  subscription_status?: string | null;
   isFollowing?: boolean;
+  tags?: {
+    job_title: string[];
+    goals: string[];
+    interests: string[];
+  };
+  membership_plan?: {
+    name?: string | null;
+    slug?: string | null;
+  } | null;
+  source?: "lbc-api";
+  can_interact?: boolean;
+  is_lbc_only?: boolean;
+  lbc_record_id?: string | null;
+  lbc_member_id?: string | null;
+  lbc_type?: string | null;
+  lbc_tier?: string | null;
 }
 
 export default function MembersPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [members, setMembers] = useState<UserWithFollowStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +99,54 @@ export default function MembersPage() {
     }
   };
 
+  const handleMessage = async (memberId: number, memberName: string) => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        toast.error("Please log in again");
+        return;
+      }
+
+      const response = await fetch("/api/chats", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "direct",
+          participant_ids: [memberId],
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to start conversation");
+      }
+
+      toast.success(`Started chat with ${memberName}`);
+      router.push(`/dashboard/chat/${data.chat.id}`);
+    } catch (error) {
+      console.error("Error starting member chat:", error);
+      toast.error("Failed to start conversation");
+    }
+  };
+
   // Fetch user subscription status
   useEffect(() => {
     const fetchUserSubscriptionStatus = async () => {
       if (!user) return;
 
       try {
+        if (user.auth_provider === "lbc") {
+          setSubscriptionStatus(
+            user.subscription_status === "active" ? "active" : "inactive",
+          );
+          return;
+        }
+
         const status = await fetchSubscriptionStatus(user.id);
         setSubscriptionStatus(status);
       } catch (error) {
@@ -100,8 +171,7 @@ export default function MembersPage() {
           return;
         }
 
-        // Fetch all members with follow status
-        const response = await fetch("/api/suggested-users?all=true", {
+        const response = await fetch("/api/dashboard/members", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -109,19 +179,12 @@ export default function MembersPage() {
         });
 
         const data = await response.json();
-        console.log("👥 Members API response:", data);
 
         if (!data.success) {
           throw new Error(data.error || "Failed to fetch members");
         }
 
-        // Set members with follow status
-        console.log(
-          "✅ Setting members:",
-          data.users?.length || 0,
-          "users found"
-        );
-        setMembers(data.users || []);
+        setMembers(Array.isArray(data.users) ? data.users : []);
       } catch (err) {
         console.error("Failed to load member list:", err);
         setError("An error occurred while loading the member list.");
@@ -196,16 +259,12 @@ export default function MembersPage() {
   }
 
   // Filter members by selected status tab and search query
-  const filteredMembers = members
+  const uniqueMembers = Array.from(
+    new Map(members.map((member) => [String(member.id), member])).values(),
+  );
+
+  const filteredMembers = uniqueMembers
     .filter((member) => {
-      console.log(
-        "🔍 Filtering member:",
-        member.full_name,
-        "status:",
-        member.status,
-        "activeTab:",
-        activeStatusTab
-      );
       return member.status === activeStatusTab;
     })
     .filter((member) => {
@@ -214,16 +273,22 @@ export default function MembersPage() {
       const query = searchQuery.toLowerCase();
       return (
         member.full_name.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query)
+        (member.email || "").toLowerCase().includes(query) ||
+        (member.headline || "").toLowerCase().includes(query) ||
+        (member.location || "").toLowerCase().includes(query) ||
+        (member.industry || "").toLowerCase().includes(query) ||
+        (member.membership_plan?.name || "").toLowerCase().includes(query) ||
+        (member.tags?.job_title || []).some((tag) =>
+          tag.toLowerCase().includes(query)
+        ) ||
+        (member.tags?.goals || []).some((tag) =>
+          tag.toLowerCase().includes(query)
+        ) ||
+        (member.tags?.interests || []).some((tag) =>
+          tag.toLowerCase().includes(query)
+        )
       );
     });
-
-  console.log("📊 Filter results:", {
-    totalMembers: members.length,
-    filteredMembers: filteredMembers.length,
-    activeStatusTab,
-    searchQuery,
-  });
 
   // Get user initials from full_name
   const getUserInitials = (fullName: string) => {
@@ -236,13 +301,83 @@ export default function MembersPage() {
 
   // Format date
   const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString("tr-TR", {
       year: "numeric",
       month: "short",
       day: "numeric",
     });
   };
+
+  const getPlanBadgeClasses = (slug?: string | null) => {
+    switch (slug) {
+      case "diamond":
+        return "bg-slate-950 text-white";
+      case "emerald":
+        return "bg-emerald-700 text-white";
+      case "platinum":
+        return "bg-gray-800 text-white";
+      case "gold":
+        return "bg-amber-500 text-white";
+      case "silver":
+        return "bg-gray-200 text-gray-800";
+      case "bronze":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const getPlanLabel = (member: UserWithFollowStatus) =>
+    member.membership_plan?.name ||
+    (member.subscription_status === "active" ? "Active Member" : "Member");
+
+  const getTagPreview = (
+    member: UserWithFollowStatus,
+    type: "goals" | "interests" | "job_title",
+  ) => (member.tags?.[type] || []).slice(0, 2);
+
+  const getInternalUserId = (member: UserWithFollowStatus) => {
+    if (typeof member.internal_user_id === "number") {
+      return member.internal_user_id;
+    }
+
+    return typeof member.id === "number" ? member.id : null;
+  };
+
+  const renderMemberAvatar = (
+    member: UserWithFollowStatus,
+    wrapperClassName: string,
+    fallbackClassName: string,
+  ) => (
+    <div className={wrapperClassName}>
+      {member.profile_image_key ? (
+        <img
+          src={getAssetPublicUrl(member.profile_image_key)}
+          alt={member.full_name}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className={fallbackClassName}>
+          {getUserInitials(member.full_name)}
+        </div>
+      )}
+    </div>
+  );
+
+  const totalCorporateMembers = uniqueMembers.filter(
+    (member) => member.status === "corporate",
+  ).length;
+  const activePremiumMembers = uniqueMembers.filter(
+    (member) => member.subscription_status === "active",
+  ).length;
+  const representedIndustries = new Set(
+    uniqueMembers
+      .map((member) => member.industry?.trim().toLowerCase())
+      .filter(Boolean),
+  ).size;
 
   return (
     <DashboardContainer user={user}>
@@ -333,6 +468,27 @@ export default function MembersPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        {[
+          { label: "Total Members", value: uniqueMembers.length },
+          { label: "Corporate Members", value: totalCorporateMembers },
+          { label: "Industries", value: representedIndustries },
+          { label: "Premium Members", value: activePremiumMembers },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="rounded-sm border border-gray-200 bg-white p-4 shadow-sm"
+          >
+            <div className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">
+              {item.label}
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-950">
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Tab Navigation */}
       <div className="bg-white rounded-sm border border-gray-200 shadow-lg overflow-hidden">
         <div className="flex border-b border-gray-200">
@@ -375,7 +531,7 @@ export default function MembersPage() {
           </div>
           <div className="text-sm">
             <span className="text-gray-600">Total: </span>
-            <span className="text-black font-medium">{members.length}</span>
+            <span className="text-black font-medium">{uniqueMembers.length}</span>
             <span className="text-gray-600"> members</span>
           </div>
         </div>
@@ -421,13 +577,36 @@ export default function MembersPage() {
           {viewMode === "card" ? (
             /* Card View - LinkedIn Style */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from(new Map(filteredMembers.map(m => [m.id, m])).values()).map((member) => (
+              {filteredMembers.map((member) => {
+                const internalUserId = getInternalUserId(member);
+                const canInteract = Boolean(internalUserId);
+
+                return (
                 <div
-                  key={member.id}
-                  className="group bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-xl transition-all duration-300 relative flex flex-col"
+                  key={String(member.id)}
+                  onClick={() => {
+                    if (internalUserId) {
+                      router.push(`/dashboard/users/${internalUserId}`);
+                    }
+                  }}
+                  className={`group bg-white border border-gray-200 rounded-xl overflow-hidden transition-all duration-300 relative flex flex-col ${
+                    canInteract
+                      ? "cursor-pointer hover:shadow-xl"
+                      : "cursor-default shadow-sm"
+                  }`}
                 >
                   {/* Cover Photo Placeholder */}
-                  <div className="h-24 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 relative">
+                  <div className="h-24 bg-gray-950 relative">
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
+                    <div className="absolute top-3 left-3">
+                      <span
+                        className={`rounded-sm px-2 py-1 text-[10px] font-black uppercase tracking-wider ${getPlanBadgeClasses(
+                          member.membership_plan?.slug,
+                        )}`}
+                      >
+                        {getPlanLabel(member)}
+                      </span>
+                    </div>
                     {/* Status Badge */}
                     <div className="absolute top-3 right-3">
                       <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
@@ -443,53 +622,122 @@ export default function MembersPage() {
                   {/* Card Content */}
                   <div className="px-6 pb-6 pt-12 text-center relative flex-1 flex flex-col">
                     {/* Profile Picture - Positioned to overlap cover */}
-                    <Link 
-                      href={`/dashboard/users/${member.id}`}
-                      className="absolute -top-12 left-1/2 transform -translate-x-1/2 group-hover:scale-105 transition-transform duration-300"
-                    >
-                      <div className="w-24 h-24 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
-                        {member.profile_image_key ? (
-                          <img
-                            src={getAssetPublicUrl(member.profile_image_key)}
-                            alt={member.full_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl uppercase">
-                            {getUserInitials(member.full_name)}
-                          </div>
+                    {internalUserId ? (
+                      <Link
+                        href={`/dashboard/users/${internalUserId}`}
+                        className="absolute -top-12 left-1/2 transform -translate-x-1/2 group-hover:scale-105 transition-transform duration-300"
+                      >
+                        {renderMemberAvatar(
+                          member,
+                          "w-24 h-24 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden",
+                          "w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl uppercase",
+                        )}
+                      </Link>
+                    ) : (
+                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2">
+                        {renderMemberAvatar(
+                          member,
+                          "w-24 h-24 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden",
+                          "w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl uppercase",
                         )}
                       </div>
-                    </Link>
+                    )}
 
                     {/* User Info */}
                     <div className="flex-1">
-                      <Link href={`/dashboard/users/${member.id}`} className="inline-block">
-                        <h3 className="text-lg font-black text-gray-900 hover:text-amber-600 transition-colors leading-tight">
+                      {internalUserId ? (
+                        <Link
+                          href={`/dashboard/users/${internalUserId}`}
+                          className="inline-block"
+                        >
+                          <h3 className="text-lg font-black text-gray-900 hover:text-amber-600 transition-colors leading-tight">
+                            {member.full_name}
+                          </h3>
+                        </Link>
+                      ) : (
+                        <h3 className="text-lg font-black text-gray-900 leading-tight">
                           {member.full_name}
                         </h3>
-                      </Link>
+                      )}
                       <p className="text-xs font-bold text-gray-500 mt-1 line-clamp-2 min-h-[2rem]">
                         {member.headline || "London Bridge Club Member"}
                       </p>
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-2">
                         {member.location || "London, United Kingdom"}
                       </p>
+                      <div className="mt-4 grid grid-cols-1 gap-2 text-left">
+                        <div className="rounded-sm bg-gray-50 px-3 py-2">
+                          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">
+                            Sector
+                          </div>
+                          <div className="mt-0.5 line-clamp-1 text-xs font-black text-gray-800">
+                            {member.industry || "Not specified"}
+                          </div>
+                        </div>
+                        <div className="rounded-sm bg-gray-50 px-3 py-2">
+                          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">
+                            Offers
+                          </div>
+                          <div className="mt-1 flex min-h-6 flex-wrap gap-1">
+                            {getTagPreview(member, "interests").length > 0 ? (
+                              getTagPreview(member, "interests").map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-sm bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700"
+                                >
+                                  {tag}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs font-bold text-gray-400">
+                                Profile pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="rounded-sm bg-gray-50 px-3 py-2">
+                          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">
+                            Looking For
+                          </div>
+                          <div className="mt-1 flex min-h-6 flex-wrap gap-1">
+                            {getTagPreview(member, "goals").length > 0 ? (
+                              getTagPreview(member, "goals").map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-sm bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700"
+                                >
+                                  {tag}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs font-bold text-gray-400">
+                                Profile pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Follow Button */}
-                    <div className="mt-6">
+                    <div className="mt-6 grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => handleFollow(member.id)}
-                        disabled={member.isFollowing}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (internalUserId) {
+                            handleFollow(internalUserId);
+                          }
+                        }}
+                        disabled={!canInteract || member.isFollowing}
                         className={`w-full py-2.5 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 ${
-                          member.isFollowing
+                          !canInteract || member.isFollowing
                             ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                             : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20 active:scale-95"
                         }`}
                       >
                         <span className="flex items-center justify-center gap-2">
-                          {member.isFollowing ? (
+                          {!canInteract ? (
+                            "Listed"
+                          ) : member.isFollowing ? (
                             <>
                               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -504,10 +752,24 @@ export default function MembersPage() {
                           )}
                         </span>
                       </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (internalUserId) {
+                            handleMessage(internalUserId, member.full_name);
+                          }
+                        }}
+                        disabled={!canInteract}
+                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-gray-700 transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:cursor-not-allowed disabled:border-gray-100 disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        <FiMessageCircle className="w-4 h-4" />
+                        Message
+                      </button>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             /* List View */
@@ -536,21 +798,29 @@ export default function MembersPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredMembers.map((member) => (
-                    <tr key={member.id} className="hover:bg-gray-50">
+                  {filteredMembers.map((member) => {
+                    const internalUserId = getInternalUserId(member);
+                    const canInteract = Boolean(internalUserId);
+
+                    return (
+                    <tr
+                      key={String(member.id)}
+                      onClick={() => {
+                        if (internalUserId) {
+                          router.push(`/dashboard/users/${internalUserId}`);
+                        }
+                      }}
+                      className={`hover:bg-gray-50 ${
+                        canInteract ? "cursor-pointer" : "cursor-default"
+                      }`}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold overflow-hidden flex-shrink-0">
-                            {member.profile_image_key ? (
-                              <img
-                                src={getAssetPublicUrl(member.profile_image_key)}
-                                alt={member.full_name}
-                                className="object-cover w-full h-full"
-                              />
-                            ) : (
-                              getUserInitials(member.full_name)
-                            )}
-                          </div>
+                          {renderMemberAvatar(
+                            member,
+                            "w-10 h-10 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 flex items-center justify-center text-black font-bold overflow-hidden flex-shrink-0",
+                            "w-full h-full flex items-center justify-center text-black font-bold uppercase",
+                          )}
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
                               {member.full_name}
@@ -579,8 +849,12 @@ export default function MembersPage() {
                             : "Individual"}
                         </span>
                         {member.subscription_status === "active" && (
-                          <span className="ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                            Premium
+                          <span
+                            className={`ml-2 inline-flex rounded-sm px-2 py-1 text-xs font-semibold ${getPlanBadgeClasses(
+                              member.membership_plan?.slug,
+                            )}`}
+                          >
+                            {getPlanLabel(member)}
                           </span>
                         )}
                       </td>
@@ -595,16 +869,39 @@ export default function MembersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
-                          <button className="px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors">
-                            Connect
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (internalUserId && !member.isFollowing) {
+                                handleFollow(internalUserId);
+                              }
+                            }}
+                            disabled={!canInteract || member.isFollowing}
+                            className="px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {!canInteract
+                              ? "Listed"
+                              : member.isFollowing
+                                ? "Following"
+                                : "Connect"}
                           </button>
-                          <button className="px-3 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 transition-colors">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (internalUserId) {
+                                handleMessage(internalUserId, member.full_name);
+                              }
+                            }}
+                            disabled={!canInteract}
+                            className="px-3 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          >
                             Message
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

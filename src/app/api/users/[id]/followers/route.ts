@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function GET(
@@ -24,8 +24,8 @@ export async function GET(
       );
     }
 
-    // Supabase bağlantısı
-    const supabase = createClient();
+    // LbcData bağlantısı
+    const lbcData = createClient();
 
     // User ID - pathname'den ID al
     const userId = parseInt(request.nextUrl.pathname.split('/')[3]); // /api/users/[id]/followers
@@ -38,7 +38,7 @@ export async function GET(
     }
 
     // Takipçileri getir - join ile ilişkiyi manuel olarak yapıyoruz
-    const { data: connections, error: connectionsError } = await supabase
+    const { data: connections, error: connectionsError } = await lbcData
       .from('connections')
       .select('follower_id')
       .eq('following_id', userId);
@@ -63,7 +63,7 @@ export async function GET(
     const followerIds = connections.map(connection => connection.follower_id);
 
     // Takipçi kullanıcı bilgilerini getir
-    const { data: followers, error: followersError } = await supabase
+    const { data: followers, error: followersError } = await lbcData
       .from('users')
       .select('id, full_name, headline, profile_image_key')
       .in('id', followerIds);
@@ -80,7 +80,7 @@ export async function GET(
     let isFollowingData: Record<number, boolean> = {};
     
     if (followerIds.length > 0) {
-      const { data: followingStatusData } = await supabase
+      const { data: followingStatusData } = await lbcData
         .from('connections')
         .select('following_id')
         .eq('follower_id', authenticatedUser.id)

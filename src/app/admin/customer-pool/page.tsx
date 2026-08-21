@@ -4,8 +4,14 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { supabase } from "@/lib/supabase";
-import { CustomerOpportunity } from "@/types/database";
+import { lbcData } from "@/lib/lbc-data";
+import type { Customer, CustomerOpportunity, DealValuationPeriod } from "@/types/database";
+import {
+  DEFAULT_CURRENCY,
+  formatCommissionRate,
+  resolveCommissionFields,
+} from "@/lib/commission";
+import { formatGBPAmount, getOpportunityValueInGBP } from "@/lib/currency";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { getAssetPublicUrl } from "@/lib/storage";
@@ -36,23 +42,35 @@ const COMMON_HASHTAGS = [
   "expansion",
   "renewal",
 ];
+
+const DEAL_VALUATION_PERIOD_OPTIONS: Array<{
+  value: DealValuationPeriod;
+  label: string;
+}> = [
+  { value: "one_time", label: "One-time" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "3 Monthly" },
+  { value: "six_months", label: "6 Monthly" },
+  { value: "annual", label: "12 Monthly" },
+];
+
+const getDealValuationPeriodLabel = (value?: string | null) =>
+  DEAL_VALUATION_PERIOD_OPTIONS.find((option) => option.value === value)?.label ||
+  "One-time";
+
 const CRM_TEXT_FIELDS = [
   { label: "Full Identity", name: "customer_name", placeholder: "Individual Name" },
-  { label: "Entity/Company", name: "company_name", placeholder: "Legal Entity" },
-  { label: "Primary Contact", name: "contact_person", placeholder: "Contact Name" },
+  { label: "Reference Contact", name: "contact_person", placeholder: "Reference Contact Name" },
   { label: "Opportunity Title", name: "opportunity_title", placeholder: "e.g. Q4 Expansion" },
   { label: "Deal Valuation", name: "estimated_deal_size", placeholder: "e.g. $50,000" },
-  { label: "Lead Manager", name: "responsible_person", placeholder: "Owner Name" },
 ] satisfies Array<{
   label: string;
   name: keyof Pick<
     CRMFormData,
     | "customer_name"
-    | "company_name"
     | "contact_person"
     | "opportunity_title"
     | "estimated_deal_size"
-    | "responsible_person"
   >;
   placeholder: string;
 }>;
@@ -64,12 +82,23 @@ const normalizeStageLabel = (stage?: string | null) => {
 };
 
 type CRMFormData = {
+  customer_id: string;
+  partner_id: string;
+  record_type: "lead" | "opportunity";
   customer_name: string;
   company_name: string;
   contact_person: string;
   opportunity_title: string;
   opportunity_description: string;
   estimated_deal_size: string;
+  estimated_deal_value: string;
+  deal_valuation_period: DealValuationPeriod;
+  currency_code: string;
+  referral_source: string;
+  commission_rate: string;
+  commission_rate_percent: string;
+  lbc_commission: string;
+  lbc_commission_amount: string;
   deal_stage: string;
   responsible_person: string;
   expected_closing_date: string;
@@ -77,13 +106,16 @@ type CRMFormData = {
 };
 
 type PartnerOption = {
+  id: number;
   name: string;
   logo_key: string | null;
+  commission_rate_percent?: number | null;
 };
 
 type MentionUser = {
   id: number;
   full_name: string | null;
+  email?: string | null;
   profile_image_key: string | null;
 };
 
@@ -107,6 +139,7 @@ export default function CustomerPoolPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [opportunities, setOpportunities] = useState<CustomerOpportunity[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -114,7 +147,6 @@ export default function CustomerPoolPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [users, setUsers] = useState<MentionUser[]>([]);
   const [interests, setInterests] = useState<CustomerOpportunityInterest[]>([]);
   const [publishingId, setPublishingId] = useState<number | null>(null);
@@ -122,25 +154,28 @@ export default function CustomerPoolPage() {
 
   // Form State
   const [formData, setFormData] = useState<CRMFormData>({
+    customer_id: "",
+    partner_id: "",
+    record_type: "lead",
     customer_name: "",
     company_name: "",
     contact_person: "",
     opportunity_title: "",
     opportunity_description: "",
     estimated_deal_size: "",
+    estimated_deal_value: "",
+    deal_valuation_period: "one_time",
+    currency_code: DEFAULT_CURRENCY,
+    referral_source: "",
+    commission_rate: "",
+    commission_rate_percent: "",
+    lbc_commission: "",
+    lbc_commission_amount: "",
     deal_stage: "Lead",
     responsible_person: "",
     expected_closing_date: "",
     status: "Active" as "Active" | "Won" | "Lost",
   });
-
-  const filteredPartners = useMemo(() => {
-    if (!formData.company_name) return [];
-    return partners.filter(p => 
-      p.name.toLowerCase().includes(formData.company_name.toLowerCase()) &&
-      p.name.toLowerCase() !== formData.company_name.toLowerCase()
-    );
-  }, [formData.company_name, partners]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -148,6 +183,7 @@ export default function CustomerPoolPage() {
       router.push("/admin");
       return;
     }
+    fetchCustomers();
     fetchOpportunities();
     fetchInterests();
     fetchPartners();
@@ -156,7 +192,10 @@ export default function CustomerPoolPage() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from('users').select('id, full_name, profile_image_key');
+      const { data, error } = await lbcData
+        .from('users')
+        .select('id, full_name, email, profile_image_key')
+        .order('full_name', { ascending: true });
       if (error) throw error;
       if (data) setUsers(data);
     } catch (error) {
@@ -166,13 +205,30 @@ export default function CustomerPoolPage() {
 
   const fetchPartners = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from('partners')
-        .select('name, logo_key');
+        .select('id, name, logo_key, commission_rate_percent');
       if (error) throw error;
       if (data) setPartners(data);
     } catch (error) {
       console.error('Error fetching partners:', error);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/customers", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCustomers(data.customers || []);
+      }
+    } catch (error) {
+      console.error("Error fetching customers:", error);
     }
   };
 
@@ -214,16 +270,101 @@ export default function CustomerPoolPage() {
     }
   };
 
+  const applyAutomaticCommission = (next: CRMFormData) => {
+    const selectedPartner = partners.find(
+      (partner) => partner.id.toString() === next.partner_id,
+    );
+    const financials = resolveCommissionFields({
+      estimatedDealSize: next.estimated_deal_size,
+      estimatedDealValue: next.estimated_deal_value,
+      commissionRate: next.commission_rate,
+      commissionRatePercent:
+        next.commission_rate_percent ||
+        selectedPartner?.commission_rate_percent,
+      partnerCommissionRatePercent: selectedPartner?.commission_rate_percent,
+      currencyCode: next.currency_code,
+    });
+
+    return {
+      ...next,
+      estimated_deal_value:
+        financials.estimatedDealValue !== null
+          ? financials.estimatedDealValue.toString()
+          : "",
+      commission_rate_percent:
+        financials.commissionRatePercent !== null
+          ? financials.commissionRatePercent.toString()
+          : "",
+      commission_rate: financials.commissionRateDisplay || "",
+      lbc_commission_amount:
+        financials.lbcCommissionAmount !== null
+          ? financials.lbcCommissionAmount.toString()
+          : "",
+      lbc_commission: financials.lbcCommissionDisplay || "",
+    };
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (name === "company_name") {
-      setShowSuggestions(true);
-    }
+    setFormData((prev) => {
+      let next: CRMFormData = { ...prev, [name]: value };
+
+      if (name === "customer_id") {
+        const selectedCustomer = customers.find(
+          (customer) => customer.id.toString() === value,
+        );
+        if (selectedCustomer) {
+          next = {
+            ...next,
+            customer_name: selectedCustomer.name || next.customer_name,
+            company_name:
+              selectedCustomer.company_name || next.company_name,
+            contact_person:
+              selectedCustomer.contact_person || next.contact_person,
+            referral_source:
+              selectedCustomer.reference_person || next.referral_source,
+          };
+        }
+      }
+
+      if (name === "partner_id") {
+        const selectedPartner = partners.find(
+          (partner) => partner.id.toString() === value,
+        );
+        if (selectedPartner) {
+          next = {
+            ...next,
+            company_name: selectedPartner.name,
+            commission_rate_percent:
+              selectedPartner.commission_rate_percent?.toString() || "",
+            commission_rate:
+              selectedPartner.commission_rate_percent !== null &&
+              selectedPartner.commission_rate_percent !== undefined
+                ? formatCommissionRate(selectedPartner.commission_rate_percent)
+                : "",
+          };
+        }
+      }
+
+      if (
+        [
+          "partner_id",
+          "estimated_deal_size",
+          "estimated_deal_value",
+          "commission_rate",
+          "commission_rate_percent",
+          "currency_code",
+        ].includes(name)
+      ) {
+        return applyAutomaticCommission(next);
+      }
+
+      return next;
+    });
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -266,25 +407,16 @@ export default function CustomerPoolPage() {
         ? `/api/customer-opportunities/${editingId}`
         : "/api/customer-opportunities";
 
-      // Synchronize with Partners table
-      const partnerExists = partners.some(p => p.name.toLowerCase() === formData.company_name.trim().toLowerCase());
-      if (!partnerExists && formData.company_name.trim()) {
-        await supabase.from('partners').insert({
-          name: formData.company_name.trim(),
-          description: `Strategic affiliate synchronized from CRM Pipeline (Primary Contact: ${formData.contact_person || 'N/A'})`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        fetchPartners();
-      }
-
       const response = await fetch(url, {
         method: editingId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          reference_person: formData.referral_source,
+        }),
       });
 
       const data = await response.json();
@@ -292,6 +424,7 @@ export default function CustomerPoolPage() {
         toast.success(
           editingId ? "Opportunity updated" : "Opportunity created",
         );
+        fetchCustomers();
         fetchOpportunities();
         resetForm();
       } else {
@@ -344,12 +477,23 @@ export default function CustomerPoolPage() {
       }
 
       setFormData({
+        customer_id: opp.customer_id?.toString() || "",
+        partner_id: opp.partner_id?.toString() || "",
+        record_type: opp.record_type || "lead",
         customer_name: opp.customer_name,
         company_name: opp.company_name,
         contact_person: opp.contact_person || "",
         opportunity_title: opp.opportunity_title,
         opportunity_description: opp.opportunity_description || "",
         estimated_deal_size: opp.estimated_deal_size || "",
+        estimated_deal_value: opp.estimated_deal_value?.toString() || "",
+        deal_valuation_period: opp.deal_valuation_period || "one_time",
+        currency_code: opp.currency_code || DEFAULT_CURRENCY,
+        referral_source: opp.referral_source || "",
+        commission_rate: opp.commission_rate || "",
+        commission_rate_percent: opp.commission_rate_percent?.toString() || "",
+        lbc_commission: opp.lbc_commission || "",
+        lbc_commission_amount: opp.lbc_commission_amount?.toString() || "",
         deal_stage: normalizeStageLabel(opp.deal_stage),
         responsible_person: opp.responsible_person || "",
         expected_closing_date: formattedDate,
@@ -387,12 +531,23 @@ export default function CustomerPoolPage() {
 
   const resetForm = () => {
     setFormData({
+      customer_id: "",
+      partner_id: "",
+      record_type: "lead",
       customer_name: "",
       company_name: "",
       contact_person: "",
       opportunity_title: "",
       opportunity_description: "",
       estimated_deal_size: "",
+      estimated_deal_value: "",
+      deal_valuation_period: "one_time",
+      currency_code: DEFAULT_CURRENCY,
+      referral_source: "",
+      commission_rate: "",
+      commission_rate_percent: "",
+      lbc_commission: "",
+      lbc_commission_amount: "",
       deal_stage: "Lead",
       responsible_person: "",
       expected_closing_date: "",
@@ -407,7 +562,8 @@ export default function CustomerPoolPage() {
       const matchesSearch =
         opp.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         opp.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        opp.opportunity_title.toLowerCase().includes(searchTerm.toLowerCase());
+        opp.opportunity_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        Boolean(opp.referral_source?.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesStatus =
         statusFilter === "All" || opp.status === statusFilter;
@@ -445,6 +601,18 @@ export default function CustomerPoolPage() {
       hashtag.toLowerCase().includes(query),
     );
   }, [tagging]);
+
+  const leadManagerOptions = useMemo(
+    () =>
+      users
+        .map((candidate) => ({
+          id: candidate.id,
+          label: candidate.full_name || candidate.email || `User #${candidate.id}`,
+        }))
+        .filter((candidate) => Boolean(candidate.label))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [users],
+  );
 
   const getInterestedMembers = (id: number) =>
     interestsByCustomerOpportunityId[id] || [];
@@ -597,12 +765,12 @@ export default function CustomerPoolPage() {
                            {opp.opportunity_title}
                         </h3>
                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+                            <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden relative flex-shrink-0 shadow-sm">
                                {getPartnerLogo(opp.company_name) ? (
                                  <img 
                                    src={getPartnerLogo(opp.company_name)!} 
                                    alt={opp.company_name} 
-                                   className="w-full h-full object-contain p-1.5"
+                                   className="h-full w-full object-contain p-2.5"
                                  />
                                ) : (
                                  <FiBriefcase className="text-amber-500" />
@@ -618,21 +786,49 @@ export default function CustomerPoolPage() {
                         <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Valuation</p>
                            <p className="text-base md:text-lg font-black text-amber-500 break-words leading-tight">{opp.estimated_deal_size || "N/A"}</p>
+                           <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                             {getDealValuationPeriodLabel(opp.deal_valuation_period)}
+                           </p>
+                           <p className="mt-2 text-xs font-black text-gray-700 dark:text-gray-200">
+                             {formatGBPAmount(getOpportunityValueInGBP(opp))}
+                           </p>
                         </div>
                         <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
 	                           <p className="text-base md:text-lg font-black text-indigo-400 break-words leading-tight">{normalizeStageLabel(opp.deal_stage)}</p>
 	                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
+                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">LBC Commission</p>
+                           <p className="text-base md:text-lg font-black text-emerald-500 break-words leading-tight">{opp.lbc_commission || "N/A"}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#1A2129] border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col justify-center">
+                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Commission Rate</p>
+                           <p className="text-base md:text-lg font-black text-sky-500 break-words leading-tight">{opp.commission_rate || "N/A"}</p>
+                        </div>
 	                     </div>
 
                      <div className="space-y-4 pt-2">
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 dark:text-gray-300">
                            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500"><FiUser /></div>
                            <div>
-                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Stakeholder</p>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Full Identity</p>
                               <p>{opp.customer_name}</p>
                            </div>
                         </div>
+                        {(opp.referral_source || opp.lbc_commission || opp.commission_rate) && (
+                          <div className="flex items-start gap-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-500">
+                              <FiActivity />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Reference</p>
+                              <p>{opp.referral_source || "N/A"}</p>
+                              <p className="mt-1 text-xs text-gray-400">
+                                {opp.lbc_commission || "No commission"} {opp.commission_rate ? `· ${opp.commission_rate}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                        )}
 	                        {opp.opportunity_description && (
 	                           <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 italic text-xs font-medium text-slate-500 dark:text-slate-400">
                               &ldquo;{opp.opportunity_description}&rdquo;
@@ -711,6 +907,71 @@ export default function CustomerPoolPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Customer Account</label>
+                        <select
+                          name="customer_id"
+                          value={formData.customer_id}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          <option value="">Create from form details</option>
+                          {customers.map((customer) => (
+                            <option key={customer.id} value={customer.id}>
+                              #{customer.id} - {customer.name}{customer.company_name ? ` / ${customer.company_name}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Business Partner</label>
+                        <select
+                          name="partner_id"
+                          value={formData.partner_id}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          <option value="">No partner link</option>
+                          {partners.map((partner) => (
+                            <option key={partner.id} value={partner.id}>
+                              {partner.name}
+                              {partner.commission_rate_percent
+                                ? ` - ${formatCommissionRate(partner.commission_rate_percent)}`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Record Type</label>
+                        <select
+                          name="record_type"
+                          value={formData.record_type}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          <option value="lead">Lead</option>
+                          <option value="opportunity">Opportunity</option>
+                        </select>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Currency</label>
+                        <select
+                          name="currency_code"
+                          value={formData.currency_code}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          <option value="GBP">GBP</option>
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                          <option value="TRY">TRY</option>
+                        </select>
+                     </div>
+
                      {CRM_TEXT_FIELDS.map((field, i) => (
                         <div key={i} className="space-y-2 relative">
                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">{field.label}</label>
@@ -720,40 +981,87 @@ export default function CustomerPoolPage() {
                               placeholder={field.placeholder}
                               value={formData[field.name]}
                               onChange={handleInputChange}
-                              onFocus={() => field.name === "company_name" && setShowSuggestions(true)}
-                              onBlur={() => field.name === "company_name" && setTimeout(() => setShowSuggestions(false), 200)}
                               className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
                            />
-                           {field.name === "company_name" && showSuggestions && filteredPartners.length > 0 && (
-                             <div className="absolute z-[60] left-0 right-0 top-full mt-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-60 overflow-y-auto">
-                               {filteredPartners.map((partner, idx) => (
-                                 <button
-                                   key={idx}
-                                   type="button"
-                                   onClick={() => {
-                                     setFormData(prev => ({ ...prev, company_name: partner.name }));
-                                     setShowSuggestions(false);
-                                   }}
-                                   className="w-full text-left px-6 py-4 hover:bg-amber-500/10 hover:text-amber-500 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
-                                 >
-                                   <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0">
-                                     {partner.logo_key ? (
-                                       <img 
-                                         src={getAssetPublicUrl(partner.logo_key)}
-                                         alt="" 
-                                         className="w-full h-full object-contain p-1"
-                                       />
-                                     ) : (
-                                       <FiBriefcase className="text-amber-500 text-xs" />
-                                     )}
-                                   </div>
-                                   <span className="font-bold text-sm truncate text-gray-700 dark:text-gray-200">{partner.name}</span>
-                                 </button>
-                               ))}
-                             </div>
-                           )}
                         </div>
                      ))}
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Deal Valuation Period</label>
+                        <select
+                          name="deal_valuation_period"
+                          value={formData.deal_valuation_period}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          {DEAL_VALUATION_PERIOD_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Lead Manager</label>
+                        <select
+                          name="responsible_person"
+                          required
+                          value={formData.responsible_person}
+                          onChange={handleInputChange}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-black text-sm dark:text-white"
+                        >
+                          <option value="">Select member</option>
+                          {formData.responsible_person &&
+                            !leadManagerOptions.some(
+                              (option) => option.label === formData.responsible_person,
+                            ) && (
+                              <option value={formData.responsible_person}>
+                                {formData.responsible_person}
+                              </option>
+                            )}
+                          {leadManagerOptions.map((option) => (
+                            <option key={option.id} value={option.label}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Reference Person</label>
+                        <input
+                           name="referral_source"
+                           placeholder="Who referred this lead?"
+                           value={formData.referral_source}
+                           onChange={handleInputChange}
+                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">LBC Commission</label>
+                        <input
+                           name="lbc_commission"
+                           placeholder="e.g. £5,000"
+                           value={formData.lbc_commission}
+                           onChange={handleInputChange}
+                           readOnly
+                           className="w-full px-6 py-4 bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Commission Rate</label>
+                        <input
+                           name="commission_rate"
+                           placeholder="e.g. 10%"
+                           value={formData.commission_rate}
+                           onChange={handleInputChange}
+                           readOnly={Boolean(formData.partner_id)}
+                           className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold dark:text-white"
+                        />
+                     </div>
                      
                      <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Pipeline Phase</label>

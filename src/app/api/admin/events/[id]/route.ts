@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { deleteFileFromAssetStorage } from '@/lib/storageUploadUtils';
+import { eventNotificationDetails, EventFormPayload, EventRecord, parseEventFormData, uploadEventImage } from '../eventUtils';
 
 export async function PUT(
   request: NextRequest,
@@ -14,61 +15,84 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const formData = await request.formData();
-    
-    const updates: any = {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      location: formData.get('location'),
-      event_date: formData.get('event_date'),
-      event_time: formData.get('event_time'),
-      category: formData.get('category'),
-      is_active: formData.get('is_active') === 'true',
-      updated_at: new Date().toISOString(),
-    };
-
-    const imageFile = formData.get('image') as File | null;
-    if (imageFile && imageFile.size > 0) {
-      const ext = imageFile.name.split('.').pop();
-      const fileName = `events/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadResult = await uploadBufferToSupabaseStorage(
-        fileName,
-        Buffer.from(await imageFile.arrayBuffer()),
-        imageFile.type
-      );
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
-      }
-      updates.image_key = fileName;
+    const eventId = Number(id);
+    if (!Number.isInteger(eventId) || eventId <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid event id' }, { status: 400 });
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
+    const formData = await request.formData();
+
+    const parsedForm = parseEventFormData(formData);
+    if (!parsedForm.ok) {
+      return NextResponse.json(
+        { success: false, error: parsedForm.error },
+        { status: parsedForm.status }
+      );
+    }
+
+    const lbcData = createClient();
+    const { data: existingEvent, error: lookupError } = await lbcData
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error('Error finding event:', lookupError);
+      return NextResponse.json({ success: false, error: 'Failed to update event' }, { status: 500 });
+    }
+
+    if (!existingEvent) {
+      return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
+    }
+
+    const imageUpload = await uploadEventImage(formData);
+    if (!imageUpload.ok) {
+      return NextResponse.json(
+        { success: false, error: imageUpload.error },
+        { status: imageUpload.status }
+      );
+    }
+
+    const updates: EventFormPayload & { image_key?: string | null } = {
+      ...parsedForm.value,
+    };
+
+    if (imageUpload.value.imageKey) {
+      updates.image_key = imageUpload.value.imageKey;
+    }
+
+    const { data: event, error } = await lbcData
       .from('events')
       .update(updates)
-      .eq('id', id)
-      .select();
+      .eq('id', eventId)
+      .select()
+      .single();
 
     if (error) {
       console.error('Error updating event:', error);
       return NextResponse.json({ success: false, error: 'Failed to update event' }, { status: 500 });
     }
 
-    // Send email notification
-    try {
-      const { sendSystemNotification } = await import('@/lib/nodemailer');
-      await sendSystemNotification("Event Updated", `
-        An event has been modified:
-        - ID: ${id}
-        - Title: ${data[0].title}
-        - New Date: ${data[0].event_date}
-        - New Location: ${data[0].location}
-      `);
-    } catch (notifyError) {
-      console.error("Notification Error:", notifyError);
+    if (!event) {
+      return NextResponse.json({ success: false, error: 'Failed to update event' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, event: data[0] });
+    if (imageUpload.value.imageKey && existingEvent.image_key && existingEvent.image_key !== imageUpload.value.imageKey) {
+      await deleteFileFromAssetStorage(existingEvent.image_key);
+    }
+
+    try {
+      const { sendSystemNotification } = await import('@/lib/nodemailer');
+      await sendSystemNotification(
+        'Event Updated',
+        `An event has been modified:\n- ID: ${eventId}\n${eventNotificationDetails(event as EventRecord)}`
+      );
+    } catch (notifyError) {
+      console.error('Event update notification error:', notifyError);
+    }
+
+    return NextResponse.json({ success: true, event });
   } catch (error) {
     console.error('Internal server error updating event:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
@@ -86,28 +110,49 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const supabase = createClient();
-    
-    const { error } = await supabase
+    const eventId = Number(id);
+    if (!Number.isInteger(eventId) || eventId <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid event id' }, { status: 400 });
+    }
+
+    const lbcData = createClient();
+    const { data: existingEvent, error: lookupError } = await lbcData
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error('Error finding event:', lookupError);
+      return NextResponse.json({ success: false, error: 'Failed to delete event' }, { status: 500 });
+    }
+
+    if (!existingEvent) {
+      return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
+    }
+
+    const { error } = await lbcData
       .from('events')
       .delete()
-      .eq('id', id);
+      .eq('id', eventId);
 
     if (error) {
       console.error('Error deleting event:', error);
       return NextResponse.json({ success: false, error: 'Failed to delete event' }, { status: 500 });
     }
 
-    // Send email notification
+    if (existingEvent.image_key) {
+      await deleteFileFromAssetStorage(existingEvent.image_key);
+    }
+
     try {
       const { sendSystemNotification } = await import('@/lib/nodemailer');
-      await sendSystemNotification("Event Deleted", `
-        An event has been removed from the calendar:
-        - Event ID: ${id}
-        - Deleted By: Admin (${session.id})
-      `);
+      await sendSystemNotification(
+        'Event Deleted',
+        `An event has been removed from the calendar:\n- Event ID: ${eventId}\n- Deleted By: Admin (${session.id})\n${eventNotificationDetails(existingEvent as EventRecord)}`
+      );
     } catch (notifyError) {
-      console.error("Notification Error:", notifyError);
+      console.error('Event delete notification error:', notifyError);
     }
 
     return NextResponse.json({ success: true });

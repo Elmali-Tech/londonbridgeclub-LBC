@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(req: NextRequest) {
   const user = await validateSession(req);
@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const lbcData = createClient();
+  const { data, error } = await lbcData
     .from('entry_fee_settings')
     .select('*')
     .eq('id', 1)
@@ -26,9 +26,9 @@ export async function PUT(req: NextRequest) {
   }
 
   const { is_active, threshold } = await req.json();
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { data, error } = await supabase
+  const { data, error } = await lbcData
     .from('entry_fee_settings')
     .upsert({
       id: 1,

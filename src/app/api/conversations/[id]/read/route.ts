@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST - Konuşmadaki mesajları okundu olarak işaretle
 export async function POST(
@@ -20,10 +20,10 @@ export async function POST(
 
     const resolvedParams = await params;
     const conversationId = parseInt(resolvedParams.id);
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Kullanıcının bu konuşmaya katılıp katılmadığını kontrol et
-    const { data: participant, error: participantError } = await supabase
+    const { data: participant, error: participantError } = await lbcData
       .from('conversation_participants')
       .select('*')
       .eq('conversation_id', conversationId)
@@ -37,8 +37,8 @@ export async function POST(
       );
     }
 
-    // Supabase fonksiyonunu kullanarak mesajları okundu olarak işaretle
-    const { error } = await supabase.rpc('mark_conversation_as_read', {
+    // LbcData fonksiyonunu kullanarak mesajları okundu olarak işaretle
+    const { error } = await lbcData.rpc('mark_conversation_as_read', {
       conv_id: conversationId,
       target_user_id: user.id
     });

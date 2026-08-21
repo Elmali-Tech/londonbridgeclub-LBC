@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types/database';
-import { login, register, logout, validateToken } from '../lib/auth';
 import Cookies from 'js-cookie';
 
 interface AuthContextType {
@@ -42,9 +41,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('AuthContext - Token bulundu mu:', token ? 'Evet' : 'Hayır');
         
         if (token) {
-          // console.log('AuthContext - Token doğrulanıyor...');
-          const user = await validateToken(token);
-          // console.log('AuthContext - Token doğrulama sonucu:', user);
+          const response = await fetch('/api/auth/session', {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const result = await response.json().catch(() => ({}));
+          const user = response.ok && result.success ? result.user as User : null;
           
           if (isMounted) {
             if (user) {
@@ -92,9 +96,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     
     try {
-      const result = await login(email, password);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await response.json().catch(() => ({}));
       
-      if (result) {
+      if (response.ok && result.success && result.user && result.token) {
+        if (!result.user.is_approved && result.user.role !== 'admin') {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${result.token}`,
+            },
+          });
+          setError('Your account is currently pending approval. You will receive an email once it is approved.');
+          setUser(null);
+          setIsLoading(false);
+          return false;
+        }
+
         setUser(result.user);
         // Token'ı hem localStorage'a hem de cookie'ye kaydet
         localStorage.setItem('authToken', result.token);
@@ -102,7 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setIsLoading(false);
         return true;
       } else {
-        setError('Invalid email or password');
+        setError(result.error || 'Invalid email or password');
         setIsLoading(false);
         return false;
       }
@@ -118,13 +142,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     
     try {
-      const user = await register(email, password, fullName, status, linkedinUrl);
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          fullName,
+          status,
+          linkedinUrl,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      const user = response.ok && result.user ? result.user as User : null;
       
       if (user) {
         // Kayıt başarılı, otomatik login olma
-        const loginResult = await login(email, password);
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+        const loginResult = await loginResponse.json().catch(() => ({}));
         
-        if (loginResult) {
+        if (loginResponse.ok && loginResult.success && loginResult.user && loginResult.token) {
           setUser(loginResult.user);
           localStorage.setItem('authToken', loginResult.token);
           Cookies.set('authToken', loginResult.token, { expires: 7 }); // 7 günlük
@@ -133,7 +178,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
       
-      setError('Registration failed');
+      setError(result.error || 'Registration failed');
       setIsLoading(false);
       return false;
     } catch (err) {
@@ -154,7 +199,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const token = Cookies.get('authToken') || localStorage.getItem('authToken');
       
       if (token) {
-        const success = await logout(token);
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const result = await response.json().catch(() => ({}));
+        const success = response.ok && result.success;
         
         if (success) {
           localStorage.removeItem('authToken');
@@ -200,4 +252,4 @@ export function useAuth() {
   }
   
   return context;
-} 
+}

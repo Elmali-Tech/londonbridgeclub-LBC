@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST request to like a post
 export async function POST(
@@ -28,11 +28,11 @@ export async function POST(
     // user_id'yi text olarak kullanıyoruz
     const userId = session.id.toString();
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the post exists
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .select('id, user_id, likes_count')
       .eq('id', postId)
@@ -46,7 +46,7 @@ export async function POST(
     }
 
     // Kullanıcının daha önce bu gönderiyi beğenip beğenmediğini kontrol et
-    const { data: existingLike, error: likeCheckError } = await supabase
+    const { data: existingLike, error: likeCheckError } = await lbcData
       .from('post_likes')
       .select('id')
       .eq('user_id', userId)
@@ -63,7 +63,7 @@ export async function POST(
 
     // RLS ile ilgili hata giderilmesi için service role kullanabiliriz
     // 1. post_likes tablosuna ekle - user_id'yi text olarak tutuyoruz
-    const { error: insertError } = await supabase
+    const { error: insertError } = await lbcData
       .from('post_likes')
       .insert({
         user_id: userId,
@@ -97,14 +97,14 @@ export async function POST(
     }
 
     // 2. likes_count alanını artır
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from('posts')
       .update({ likes_count: (post.likes_count || 0) + 1 })
       .eq('id', postId);
 
     if (updateError) {
       // likes_count güncellenemezse, eklenen beğeniyi geri al
-      await supabase
+      await lbcData
         .from('post_likes')
         .delete()
         .eq('user_id', userId)
@@ -156,11 +156,11 @@ export async function DELETE(
     // user_id'yi text olarak kullanıyoruz
     const userId = session.id.toString();
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the post exists
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .select('id, user_id, likes_count')
       .eq('id', postId)
@@ -174,7 +174,7 @@ export async function DELETE(
     }
 
     // Kullanıcının daha önce bu gönderiyi beğenip beğenmediğini kontrol et
-    const { data: existingLike, error: likeCheckError } = await supabase
+    const { data: existingLike, error: likeCheckError } = await lbcData
       .from('post_likes')
       .select('id')
       .eq('user_id', userId)
@@ -190,7 +190,7 @@ export async function DELETE(
     }
 
     // 1. post_likes tablosundan sil
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await lbcData
       .from('post_likes')
       .delete()
       .eq('user_id', userId)
@@ -216,14 +216,14 @@ export async function DELETE(
     // 2. likes_count alanını azalt (0'ın altına düşmemesi için kontrol)
     const newLikeCount = Math.max(0, (post.likes_count || 0) - 1);
     
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from('posts')
       .update({ likes_count: newLikeCount })
       .eq('id', postId);
 
     if (updateError) {
       // likes_count güncellenemezse, silinen beğeniyi geri ekle
-      await supabase
+      await lbcData
         .from('post_likes')
         .insert({
           user_id: userId,

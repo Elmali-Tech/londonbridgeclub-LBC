@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
 import { syncPriceFromStripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST /api/admin/plans/sync-prices — Tüm planların fiyatlarını Stripe'dan senkronize et
 export async function POST(req: NextRequest) {
@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
-  const { data: plans, error } = await supabase
+  const lbcData = createClient();
+  const { data: plans, error } = await lbcData
     .from('membership_plans')
     .select('id, name, stripe_monthly_price_id, stripe_yearly_price_id')
     .eq('is_active', true);
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (yearlyAmount !== null) updates.yearly_price = yearlyAmount;
 
     if (Object.keys(updates).length > 1) {
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await lbcData
         .from('membership_plans')
         .update(updates)
         .eq('id', plan.id);

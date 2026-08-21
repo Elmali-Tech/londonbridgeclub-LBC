@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { AuthProvider } from "../context/AuthContext";
 import { Toaster } from "react-hot-toast";
 import RealtimeInitializer from "../components/RealtimeInitializer";
@@ -15,7 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://londonbridge.club";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: "London Bridge Club",
   description: "Join our exclusive community of professionals",
   keywords: ["club", "professional network", "business", "London", "membership"],
@@ -29,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "London Bridge Club",
     description: "Join our exclusive community of professionals",
-    url: "https://londonbridgeclub.com",
+    url: baseUrl,
     siteName: "London Bridge Club",
     locale: "en_GB",
     type: "website",
@@ -90,6 +94,14 @@ export default function RootLayout({
             }}
           />
         </AuthProvider>
+        <Script
+          src="https://ali-chatbot-api.vercel.app/chatbot-widget.js?v=17.1"
+          strategy="afterInteractive"
+          data-tenant="lbc"
+          data-tenant-name="London Bridge Club"
+          data-brand-color="#0F172A"
+          data-greeting="Merhaba, ben London Bridge Club asistanı Ali. Size nasıl yardımcı olabilirim?"
+        />
       </body>
     </html>
   );

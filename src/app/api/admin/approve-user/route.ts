@@ -1,9 +1,20 @@
-import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { NextRequest, NextResponse } from "next/server";
+import { lbcData } from "@/lib/lbc-data";
 import { sendUserApprovedEmail } from "@/lib/nodemailer";
+import { validateToken } from "@/lib/auth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get("authorization");
+    const sessionToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : request.cookies.get("authToken")?.value;
+
+    const authUser = sessionToken ? await validateToken(sessionToken) : null;
+    if (!authUser || (!authUser.is_admin && authUser.role !== "admin")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { userId } = body;
 
@@ -12,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Kullanıcı bilgilerini al
-    const { data: user, error: fetchError } = await supabase
+    const { data: user, error: fetchError } = await lbcData
       .from("users")
       .select("*")
       .eq("id", userId)
@@ -23,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     // Kullanıcıyı onayla
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from("users")
       .update({ 
         is_approved: true,

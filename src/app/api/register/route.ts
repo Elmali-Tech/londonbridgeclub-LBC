@@ -1,116 +1,148 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { hashPassword } from "@/lib/auth";
-import { sendWelcomeEmail, sendApprovalRequestEmail } from "@/lib/nodemailer";
+import { lbcData } from "@/lib/lbc-data";
+import { register as registerUser } from "@/lib/auth";
+import { getLbcAuthReadiness } from "@/lib/lbc-auth";
+import { sendApprovalRequestEmail } from "@/lib/nodemailer";
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { email, password, fullName, status, linkedinUrl, token } = body;
+  const {
+    email,
+    password,
+    fullName,
+    status,
+    linkedinUrl,
+    token,
+    phone,
+    birthDate,
+    address,
+    profession,
+    companyName,
+    position,
+    employeeCount,
+    website,
+    interests,
+    networkConnections,
+    associationMembership,
+    isLBCMember,
+  } = body;
 
-  // Token kontrolü - OPSIYONEL (Eğer yoksa genel başvuru sayılır)
-  let tokenData = null;
+  if (!email || !password || !fullName || !status) {
+    return NextResponse.json(
+      { error: "Email, password, fullName and status are required" },
+      { status: 400 },
+    );
+  }
+
+  if (!["personal", "corporate"].includes(status)) {
+    return NextResponse.json(
+      { error: "Invalid membership status" },
+      { status: 400 },
+    );
+  }
+
   if (token) {
-    // Token doğrulama
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from("register_tokens")
       .select("*")
       .eq("token", token)
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: "Geçersiz token" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Geçersiz token" }, { status: 400 });
     }
-
-    // Token zaten kullanılmış mı?
     if (data.used) {
       return NextResponse.json(
         { error: "Bu token zaten kullanılmış" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
-    // Token'daki email ile kayıt email'i eşleşiyor mu?
     if (data.email !== email) {
       return NextResponse.json(
         { error: "Bu token başka bir email adresi için oluşturulmuş" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-    
-    tokenData = data;
   }
 
+  const profileNotes = [
+    profession ? `Profession: ${profession}` : null,
+    companyName ? `Company: ${companyName}` : null,
+    position ? `Position: ${position}` : null,
+    employeeCount ? `Employee Count: ${employeeCount}` : null,
+    interests ? `Interests: ${interests}` : null,
+    networkConnections ? `Network Connections: ${networkConnections}` : null,
+    associationMembership ? `Association Membership: ${associationMembership}` : null,
+    typeof isLBCMember === "boolean"
+      ? `Existing LBC Member: ${isLBCMember ? "Yes" : "No"}`
+      : null,
+  ].filter(Boolean).join("\n");
 
-  // Email kontrolü
-  const { data: existingUsers } = await supabase
-    .from("users")
-    .select("*")
-    .eq("email", email);
-
-  if (existingUsers && existingUsers.length > 0) {
+  const readiness = getLbcAuthReadiness();
+  if (!readiness.canRegisterMembers) {
     return NextResponse.json(
-      { error: "Email already exists" },
-      { status: 400 }
+      {
+        error: "LBC auth is not ready for member registration.",
+        code: "LBC_AUTH_NOT_READY",
+        readiness,
+      },
+      { status: 503 },
     );
   }
 
-  // Şifreyi hashle
-  const passwordHash = hashPassword(password);
+  const user = await registerUser(email, password, fullName, status, linkedinUrl, {
+    phone: phone || null,
+    address: address || null,
+    birth_date: birthDate || null,
+    representative_name: fullName,
+    title: position || null,
+    company_name: companyName || null,
+    employee_count: employeeCount || null,
+    website_url: website || null,
+    interests: interests || null,
+    sector: profession || null,
+    about: profileNotes || null,
+    is_existing_lbc_member: Boolean(isLBCMember),
+  });
 
-  // Kullanıcıyı ekle
-  const { data, error } = await supabase
-    .from("users")
-    .insert([
-      {
-        email,
-        password_hash: passwordHash,
-        full_name: fullName,
-        status,
-        linkedin_url: linkedinUrl,
-        is_approved: false, // Pending approval
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ])
-    .select();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!user) {
+    return NextResponse.json(
+      { error: "LBC member registration failed" },
+      { status: 500 },
+    );
   }
 
-  // Token'ı kullanıldı olarak işaretle (eğer varsa)
   if (token) {
-    await supabase
+    const { error } = await lbcData
       .from("register_tokens")
-      .update({
-        used: true,
-        used_at: new Date().toISOString(),
-      })
+      .update({ used: true, used_at: new Date().toISOString() })
       .eq("token", token);
+    if (error) {
+      console.error("LBC register token update failed:", error);
+    }
   }
 
-  // Admin'e onay maili gönder
   try {
-    await sendApprovalRequestEmail({
-      fullName,
-      email,
-      status,
-      linkedinUrl
-    });
+    await sendApprovalRequestEmail({ fullName, email, status, linkedinUrl });
   } catch (mailError) {
     console.error("Admin notification error:", mailError);
   }
 
-  return NextResponse.json({ 
-    user: data?.[0] || null,
-    message: "Application sent for approval" 
-  }, { status: 200 });
+  return NextResponse.json(
+    {
+      user,
+      status: "pending_approval",
+      message: "Application sent for approval",
+    },
+    { status: 200 },
+  );
 }
 
 export async function GET() {
-  // Redirect accidental browser visits to the API back to the registration page
-  return NextResponse.redirect(new URL("/register", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"));
+  return NextResponse.redirect(
+    new URL(
+      "/register",
+      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000",
+    ),
+  );
 }

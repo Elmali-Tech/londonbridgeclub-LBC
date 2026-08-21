@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
 
     const userId = currentUser.id;
 
-    const supabase = createClient();
+    const lbcData = createClient();
     
     // Get user data
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await lbcData
       .from('users')
       .select('*')
       .eq('id', userId)
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user tags
-    const { data: tags, error: tagsError } = await supabase
+    const { data: tags, error: tagsError } = await lbcData
       .from('user_tags')
       .select('tag_type')
       .eq('user_id', userId);

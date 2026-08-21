@@ -894,9 +894,9 @@ export default function ProfilePage() {
   // Get tag type display name
   const getTagTypeDisplayName = (type: keyof UserTags) => {
     const names = {
-      job_title: 'Job Title',
-      goals: 'Goals',
-      interests: 'Interests'
+      job_title: 'Role / Service',
+      goals: 'Looking For',
+      interests: 'Offering / Markets'
     };
     return names[type];
   };
@@ -904,9 +904,9 @@ export default function ProfilePage() {
   // Get tag placeholder with examples
   const getTagPlaceholder = (type: keyof UserTags) => {
     const placeholders = {
-      job_title: 'e.g. CTO, COO, Frontend Developer, Product Manager...',
-      goals: 'e.g. Learn React, Start a business, Get promoted...',
-      interests: 'e.g. Technology, Travel, Photography, Music...'
+      job_title: 'e.g. Founder, Investor, Procurement Lead, Energy Consultant...',
+      goals: 'e.g. UK distributors, Turkish suppliers, investor intros...',
+      interests: 'e.g. Energy, Real Estate, Travel, Technology, Insurance...'
     };
     return placeholders[type];
   };
@@ -1183,7 +1183,7 @@ export default function ProfilePage() {
               <div className="space-y-6">
                 {/* Roles */}
                 <div>
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Roles & Positions</h3>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Role / Service</h3>
                   <div className="flex flex-wrap gap-2">
                     {userTags.job_title.length > 0 ? userTags.job_title.map((tag, i) => (
                       <span key={i} className="group flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-black uppercase border border-blue-100">
@@ -1198,7 +1198,7 @@ export default function ProfilePage() {
                 
                 {/* Goals */}
                 <div>
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Core Objectives</h3>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Looking For</h3>
                   <div className="flex flex-wrap gap-2">
                     {userTags.goals.length > 0 ? userTags.goals.map((tag, i) => (
                       <span key={i} className="group flex items-center gap-2 px-4 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-black uppercase border border-green-100">
@@ -1207,13 +1207,13 @@ export default function ProfilePage() {
                           <X className="w-3 h-3" />
                         </button>
                       </span>
-                    )) : <p className="text-xs font-bold text-gray-300 italic">No goals added</p>}
+                    )) : <p className="text-xs font-bold text-gray-300 italic">No looking-for tags added</p>}
                   </div>
                 </div>
 
                 {/* Interests */}
                 <div>
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Areas of Interest</h3>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Offering / Markets</h3>
                   <div className="flex flex-wrap gap-2">
                     {userTags.interests.length > 0 ? userTags.interests.map((tag, i) => (
                       <span key={i} className="group flex items-center gap-2 px-4 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-black uppercase border border-purple-100">

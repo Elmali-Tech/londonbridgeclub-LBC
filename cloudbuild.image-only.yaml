@@ -1,0 +1,30 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_IMAGE}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_BASE_URL=${_NEXT_PUBLIC_BASE_URL}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_AWS_REGION=${_NEXT_PUBLIC_AWS_REGION}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_AWS_S3_BUCKET_NAME=${_NEXT_PUBLIC_AWS_S3_BUCKET_NAME}"
+      - "."
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE}"]
+
+images:
+  - "${_IMAGE}"
+
+substitutions:
+  _IMAGE: "gcr.io/arboreal-tracer-492108-s4/lbc-web"
+  _NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ""
+  _NEXT_PUBLIC_BASE_URL: "https://londonbridge.club"
+  _NEXT_PUBLIC_AWS_REGION: ""
+  _NEXT_PUBLIC_AWS_S3_BUCKET_NAME: ""
+
+options:
+  logging: CLOUD_LOGGING_ONLY

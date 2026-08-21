@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(
   request: NextRequest,
@@ -21,11 +21,20 @@ export async function GET(
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    const isLbcUserId =
+      userId.startsWith('lbc:') || userId.startsWith('rec') || !Number.isFinite(Number(userId));
+    if (session.auth_provider === 'lbc' || isLbcUserId) {
+      return NextResponse.json({
+        success: true,
+        posts: [],
+      });
+    }
+
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Get user's posts
-    const { data: posts, error: postsError } = await supabase
+    const { data: posts, error: postsError } = await lbcData
       .from('posts')
       .select(`
         *,
@@ -43,7 +52,7 @@ export async function GET(
     }
 
     // Check for likes by the current user
-    const { data: likes, error: likesError } = await supabase
+    const { data: likes, error: likesError } = await lbcData
       .from('likes')
       .select('post_id')
       .eq('user_id', session.id);
@@ -80,4 +89,4 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}

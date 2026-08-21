@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     // Check if token exists and is valid
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('register_tokens')
       .select('*')
       .eq('token', token)

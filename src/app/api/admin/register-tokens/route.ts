@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 import { sendInvitationEmail } from '@/lib/nodemailer';
 
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already has a token
-    const { data: existingToken } = await supabase
+    const { data: existingToken } = await lbcData
       .from('register_tokens')
       .select('*')
       .eq('email', email)
@@ -44,14 +44,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user id for created_by
-    const { data: adminUser } = await supabase
+    const { data: adminUser } = await lbcData
       .from('users')
       .select('id')
       .eq('id', authUser.id)
       .single();
 
     // Create token
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('register_tokens')
       .insert([
         {
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('register_tokens')
       .select('*')
       .order('created_at', { ascending: false });

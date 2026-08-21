@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPortalSession } from '@/lib/stripe';
 import { validateToken } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Kullanıcının Stripe müşteri ID'sini al
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('users')
       .select('stripe_customer_id')
       .eq('id', user.id)

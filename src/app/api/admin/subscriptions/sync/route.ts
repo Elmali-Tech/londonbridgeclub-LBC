@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
 import { stripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST /api/admin/subscriptions/sync — Stripe'tan tüm aboneliklerin güncel durumunu çek
 export async function POST(req: NextRequest) {
@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
+  const lbcData = createClient();
 
   // Tüm subscriptions'ları al
-  const { data: subs, error } = await supabase
+  const { data: subs, error } = await lbcData
     .from('subscriptions')
     .select('id, stripe_subscription_id, user_id, status')
     .not('stripe_subscription_id', 'is', null);
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       const newStatus = stripeSub.status as string;
 
       // DB'yi güncelle
-      await supabase
+      await lbcData
         .from('subscriptions')
         .update({
           status: newStatus,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         .eq('id', sub.id);
 
       // User'ın subscription_status'unu da güncelle
-      await supabase
+      await lbcData
         .from('users')
         .update({ subscription_status: newStatus })
         .eq('id', sub.user_id);

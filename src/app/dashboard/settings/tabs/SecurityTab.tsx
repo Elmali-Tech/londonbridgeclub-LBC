@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { toast } from 'react-hot-toast';
 
 export default function SecurityTab() {
@@ -19,8 +19,8 @@ export default function SecurityTab() {
     
     setSaving(true);
     try {
-      // Update password in Supabase Auth
-      const { error } = await supabase.auth.updateUser({
+      // Update password through the LBC auth endpoint.
+      const { error } = await lbcData.auth.updateUser({
         password: passwordData.newPassword
       });
       

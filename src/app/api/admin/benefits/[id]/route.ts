@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
 import { deleteFileFromS3 } from '@/lib/s3UploadUtils';
 import {
-  deleteFileFromSupabaseStorage,
-  uploadBufferToSupabaseStorage,
+  deleteFileFromAssetStorage,
+  uploadBufferToAssetStorage,
 } from '@/lib/storageUploadUtils';
 
 const canAttemptLegacyS3Delete = () =>
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await lbcData
       .from('users')
       .select('is_admin')
       .eq('id', session.id)
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const resolvedParams = await params;
-    const { data: benefit, error } = await supabase
+    const { data: benefit, error } = await lbcData
       .from('benefits')
       .select('*')
       .eq('id', resolvedParams.id)
@@ -59,7 +59,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await lbcData
       .from('users')
       .select('is_admin')
       .eq('id', session.id)
@@ -71,7 +71,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const resolvedParams = await params;
     // Get existing benefit data
-    const { data: existingBenefit, error: fetchError } = await supabase
+    const { data: existingBenefit, error: fetchError } = await lbcData
       .from('benefits')
       .select('*')
       .eq('id', resolvedParams.id)
@@ -110,7 +110,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       // Delete old image if exists
       if (existingBenefit.image_key) {
-        await deleteFileFromSupabaseStorage(existingBenefit.image_key);
+        await deleteFileFromAssetStorage(existingBenefit.image_key);
         if (canAttemptLegacyS3Delete()) {
           await deleteFileFromS3(existingBenefit.image_key);
         }
@@ -121,19 +121,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const fileName = `benefits/${uuidv4()}.${fileExtension}`;
       imageKey = fileName;
 
-      const uploadResult = await uploadBufferToSupabaseStorage(
+      const uploadResult = await uploadBufferToAssetStorage(
         fileName,
         Buffer.from(await imageFile.arrayBuffer()),
         imageFile.type
       );
 
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+        throw new Error(uploadResult.error || 'Asset storage upload failed');
       }
     }
 
     // Update benefit in database
-    const { data: benefit, error } = await supabase
+    const { data: benefit, error } = await lbcData
       .from('benefits')
       .update({
         title,
@@ -173,7 +173,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await lbcData
       .from('users')
       .select('is_admin')
       .eq('id', session.id)
@@ -185,7 +185,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const resolvedParams = await params;
     // Get benefit data to delete associated image
-    const { data: benefit, error: fetchError } = await supabase
+    const { data: benefit, error: fetchError } = await lbcData
       .from('benefits')
       .select('image_key')
       .eq('id', resolvedParams.id)
@@ -197,14 +197,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Delete image from storage if exists
     if (benefit.image_key) {
-      await deleteFileFromSupabaseStorage(benefit.image_key);
+      await deleteFileFromAssetStorage(benefit.image_key);
       if (canAttemptLegacyS3Delete()) {
         await deleteFileFromS3(benefit.image_key);
       }
     }
 
     // Delete benefit from database
-    const { error } = await supabase
+    const { error } = await lbcData
       .from('benefits')
       .delete()
       .eq('id', resolvedParams.id);

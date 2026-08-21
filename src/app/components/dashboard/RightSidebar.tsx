@@ -10,7 +10,7 @@ import { MdWorkOutline, MdCardGiftcard, MdArrowForward } from 'react-icons/md';
 import Cookies from 'js-cookie';
 
 interface SuggestedUser {
-  id: number;
+  id: number | string;
   full_name: string;
   headline?: string;
   profile_image_key?: string;
@@ -197,6 +197,7 @@ export default function RightSidebar() {
                         src={getS3PublicUrl(opp.image_key)}
                         alt={opp.title}
                         fill
+                        sizes="56px"
                         className="object-cover"
                       />
                     </div>
@@ -265,6 +266,7 @@ export default function RightSidebar() {
                         src={getS3PublicUrl(benefit.image_key)}
                         alt={benefit.title}
                         fill
+                        sizes="56px"
                         className="object-cover"
                       />
                     </div>
@@ -320,6 +322,7 @@ export default function RightSidebar() {
                     src={getAssetPublicUrl(user.profile_image_key)}
                     alt={user.full_name}
                     fill
+                    sizes="48px"
                     className="object-cover"
                   />
                 ) : (
@@ -350,115 +353,26 @@ export default function RightSidebar() {
         </div>
       </div>
       
-      {/* Join discussion */}
-      <div className="bg-white border border-gray-300 rounded-lg overflow-hidden relative">
-        {/* Coming Soon Overlay */}
-        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-          <div className="text-center">
-            <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-6 py-3 rounded-full shadow-lg mb-2">
-              <span className="font-semibold text-sm">Coming Soon</span>
-            </div>
-            <p className="text-gray-600 text-xs">Discussion feature is under development</p>
-          </div>
+      {/* Business corridors */}
+      <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-black font-semibold text-base">Business Corridors</h3>
         </div>
-        
-        <div className="p-4">
-          <h3 className="text-black font-semibold text-base mb-3">Join discussion</h3>
-        </div>
-        <div className="px-4 pb-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2 flex-shrink-0">
-              <Image
-                src="https://randomuser.me/api/portraits/women/1.jpg"
-                alt="User 1"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/men/2.jpg"
-                alt="User 2"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/women/3.jpg"
-                alt="User 3"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
+        <div className="px-4 py-4 space-y-3">
+          {[
+            { label: 'UK-Turkiye Trade', value: 'Cross-border supply and distribution' },
+            { label: 'Investor Circle', value: 'Startup, property and growth capital' },
+            { label: 'Supplier Network', value: 'Energy, travel, insurance and technology' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <h4 className="text-sm font-bold text-gray-950">{item.label}</h4>
+              <p className="mt-1 text-xs font-medium text-gray-500">{item.value}</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-black font-medium text-sm hover:underline cursor-pointer">#CoronaVirus</h4>
-              <p className="text-gray-500 text-xs">19,259 post</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2 flex-shrink-0">
-              <Image
-                src="https://randomuser.me/api/portraits/men/4.jpg"
-                alt="User 4"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/women/5.jpg"
-                alt="User 5"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/men/6.jpg"
-                alt="User 6"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-black font-medium text-sm hover:underline cursor-pointer">#Economy</h4>
-              <p className="text-gray-500 text-xs">26,254 post</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2 flex-shrink-0">
-              <Image
-                src="https://randomuser.me/api/portraits/women/7.jpg"
-                alt="User 7"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/men/8.jpg"
-                alt="User 8"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-              <Image
-                src="https://randomuser.me/api/portraits/women/9.jpg"
-                alt="User 9"
-                width={20}
-                height={20}
-                className="rounded-full border border-white"
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-black font-medium text-sm hover:underline cursor-pointer">#CuteDogs</h4>
-              <p className="text-gray-500 text-xs">1,087,254 post</p>
-            </div>
-          </div>
+          ))}
         </div>
         <div className="px-4 pb-4">
-          <Link href="/dashboard/members" className="w-full text-center text-gray-600 text-sm font-medium hover:text-black transition-colors block">
-            See All
+          <Link href="/dashboard/partners" className="w-full text-center text-gray-600 text-sm font-medium hover:text-black transition-colors block">
+            Explore Partners
           </Link>
         </div>
       </div>

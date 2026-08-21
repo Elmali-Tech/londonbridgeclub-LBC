@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { Partner } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { AllowedFileTypes } from "@/lib/awsConfig";
 import { getAssetPublicUrl } from "@/lib/storage";
+import { formatCommissionRate, parsePercentValue } from "@/lib/commission";
 import Image from "next/image";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiBriefcase, FiLink } from "react-icons/fi";
 
@@ -26,6 +27,7 @@ export default function PartnersPage() {
     name: "",
     description: "",
     website_url: "",
+    commission_rate_percent: "",
     logo: null as File | null,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export default function PartnersPage() {
 
   const fetchOpportunities = async () => {
     try {
-      const { data, error } = await supabase.from('customer_opportunities').select('company_name');
+      const { data, error } = await lbcData.from('customer_opportunities').select('company_name');
       if (data) setOpportunities(data);
     } catch (error) {
       console.error('Error fetching opportunities:', error);
@@ -63,7 +65,7 @@ export default function PartnersPage() {
   const fetchPartners = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from("partners")
         .select("*")
         .order("created_at", { ascending: false });
@@ -97,6 +99,7 @@ export default function PartnersPage() {
         name: partner.name,
         description: partner.description,
         website_url: partner.website_url || "",
+        commission_rate_percent: partner.commission_rate_percent?.toString() || "",
         logo: null,
       });
       setLogoPreview(getPartnerLogoUrl(partner.logo_key) || null);
@@ -107,6 +110,7 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        commission_rate_percent: "",
         logo: null,
       });
       setLogoPreview(null);
@@ -122,6 +126,7 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        commission_rate_percent: "",
         logo: null,
       });
     }, 300);
@@ -220,12 +225,14 @@ export default function PartnersPage() {
       }
 
       if (isEditMode && selectedPartner) {
-        const { error } = await supabase
+        const { error } = await lbcData
           .from("partners")
           .update({
             name: formData.name,
             description: formData.description,
             website_url: formData.website_url || null,
+            commission_rate_percent:
+              parsePercentValue(formData.commission_rate_percent) ?? 0,
             logo_key,
             updated_at: new Date().toISOString(),
           })
@@ -234,10 +241,12 @@ export default function PartnersPage() {
         if (error) throw error;
         toast.success("Partner company updated successfully");
       } else {
-        const { error } = await supabase.from("partners").insert({
+        const { error } = await lbcData.from("partners").insert({
           name: formData.name,
           description: formData.description,
           website_url: formData.website_url || null,
+          commission_rate_percent:
+            parsePercentValue(formData.commission_rate_percent) ?? 0,
           logo_key,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -284,7 +293,7 @@ export default function PartnersPage() {
       setIsSubmitting(true);
       const partnerToDelete = partners.find((p) => p.id === id);
 
-      const { error } = await supabase.from("partners").delete().eq("id", id);
+      const { error } = await lbcData.from("partners").delete().eq("id", id);
       if (error) throw error;
 
       if (partnerToDelete?.logo_key) {
@@ -421,6 +430,17 @@ export default function PartnersPage() {
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Contract Commission Rate</label>
+              <input
+                name="commission_rate_percent"
+                value={formData.commission_rate_percent}
+                onChange={handleInputChange}
+                placeholder="E.g. 10%"
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Corporate Details / Mission</label>
               <textarea
                 name="description"
@@ -446,8 +466,8 @@ export default function PartnersPage() {
                 </label>
               </div>
               {logoPreview && (
-                <div className="mt-4 relative w-40 h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                  <Image src={logoPreview} alt="Preview" fill className="object-contain p-3" />
+                <div className="mt-4 relative h-32 w-56 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 flex items-center justify-center shadow-sm">
+                  <Image src={logoPreview} alt="Preview" fill className="object-contain p-4" />
                 </div>
               )}
             </div>
@@ -490,13 +510,13 @@ export default function PartnersPage() {
               
               <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-start gap-4 mb-5">
-                  <div className="w-20 h-20 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden flex-shrink-0 relative shadow-sm">
+                  <div className="w-24 h-24 rounded-xl flex items-center justify-center border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-hidden flex-shrink-0 relative shadow-sm">
                     {partner.logo_key ? (
                       <Image 
                         src={getPartnerLogoUrl(partner.logo_key)}
                         alt={partner.name} 
                         fill 
-                        className="object-contain p-2" 
+                        className="object-contain p-4"
                       />
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent flex items-center justify-center">
@@ -516,6 +536,9 @@ export default function PartnersPage() {
                         )}
                         <span className="text-[10px] font-black uppercase bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-500">
                           {opportunities.filter(o => o.company_name?.toLowerCase() === partner.name.toLowerCase()).length} Prospects
+                        </span>
+                        <span className="text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-300">
+                          {formatCommissionRate(partner.commission_rate_percent || 0)}
                         </span>
                      </div>
                   </div>
@@ -566,13 +589,13 @@ export default function PartnersPage() {
                   <tr key={partner.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 overflow-hidden relative flex-shrink-0 shadow-sm">
+                        <div className="w-16 h-16 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-hidden relative flex-shrink-0 shadow-sm">
                           {partner.logo_key ? (
                             <Image 
                                src={getPartnerLogoUrl(partner.logo_key)}
                                alt={partner.name} 
                                fill 
-                               className="object-contain p-1.5" 
+                               className="object-contain p-3"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-blue-500/5">
@@ -592,6 +615,9 @@ export default function PartnersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium max-w-sm">
                        <p className="line-clamp-2 leading-relaxed">{partner.description}</p>
+                       <p className="mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                         Commission: {formatCommissionRate(partner.commission_rate_percent || 0)}
+                       </p>
                     </td>
                     <td className="px-6 py-4 text-right">
                        {deleteConfirmId === partner.id ? (

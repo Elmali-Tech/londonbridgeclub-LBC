@@ -1,66 +1,29 @@
-export const DEFAULT_STORAGE_BUCKET = 'lbc-assets';
+export const DEFAULT_STORAGE_BUCKET = "londonbridgeproject";
 
-const publicStorageBucketName = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+const normalizeAssetKey = (key: string) => key.trim().replace(/^\/+/, "");
+const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
 
 export const storageBucketName =
-  publicStorageBucketName ||
-  process.env.SUPABASE_STORAGE_BUCKET ||
-  DEFAULT_STORAGE_BUCKET;
-
-const normalizeAssetKey = (key: string) => key.trim().replace(/^\/+/, '');
-
-const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
+  process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || DEFAULT_STORAGE_BUCKET;
 
 export const getLegacyS3PublicUrl = (
   key: string,
-  bucket = process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME || 'londonbridgeproject'
+  bucket = storageBucketName,
 ): string => {
-  if (!key) return '';
+  if (!key) return "";
   if (isAbsoluteUrl(key)) return key;
-
-  const s3BaseUrl = process.env.NEXT_PUBLIC_AWS_S3_URL;
-  if (s3BaseUrl) {
-    return `${s3BaseUrl.replace(/\/$/, '')}/${normalizeAssetKey(key)}`;
+  const baseUrl = process.env.NEXT_PUBLIC_AWS_S3_URL;
+  if (baseUrl) {
+    return `${baseUrl.replace(/\/$/, "")}/${normalizeAssetKey(key)}`;
   }
-
-  const region = process.env.NEXT_PUBLIC_AWS_REGION || 'eu-north-1';
+  const region = process.env.NEXT_PUBLIC_AWS_REGION || "eu-north-1";
   return `https://${bucket}.s3.${region}.amazonaws.com/${normalizeAssetKey(key)}`;
 };
 
-export const getSupabaseStoragePublicUrl = (
-  key: string,
-  bucket = storageBucketName
-): string => {
-  if (!key) return '';
-  if (isAbsoluteUrl(key)) return key;
+export const getAssetPublicUrl = (key: string, bucket = storageBucketName) =>
+  getLegacyS3PublicUrl(key, bucket);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return getLegacyS3PublicUrl(key);
-  }
-
-  const baseUrl = supabaseUrl.replace(/\/$/, '');
-  return `${baseUrl}/storage/v1/object/public/${bucket}/${encodeURI(normalizeAssetKey(key))}`;
+export const getAssetUrlPair = (key: string, legacyBucket?: string) => {
+  const url = getLegacyS3PublicUrl(key, legacyBucket);
+  return { primary: url, fallback: url };
 };
-
-export const getAssetPublicUrl = (
-  key: string,
-  bucket = publicStorageBucketName
-): string => {
-  if (!key) return '';
-  if (isAbsoluteUrl(key)) return key;
-
-  if (!bucket) {
-    return getLegacyS3PublicUrl(key);
-  }
-
-  return getSupabaseStoragePublicUrl(key, bucket);
-};
-
-export const getAssetUrlPair = (
-  key: string,
-  legacyBucket?: string
-): { primary: string; fallback: string } => ({
-  primary: getAssetPublicUrl(key),
-  fallback: getLegacyS3PublicUrl(key, legacyBucket),
-});

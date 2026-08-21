@@ -18,6 +18,8 @@ interface PlanWithFeatures extends MembershipPlan {
   })[];
 }
 
+type PlanCategoryFilter = "all" | "individual" | "corporate";
+
 const benefits = [
   {
     title: "Curated Introductions",
@@ -49,14 +51,10 @@ export default function MembershipPage() {
   const [memberCount, setMemberCount] = useState(0);
   const [plansLoading, setPlansLoading] = useState(true);
   const [loadingPlanId, setLoadingPlanId] = useState<number | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<"individual" | "corporate">("individual");
+  const [selectedCategory, setSelectedCategory] = useState<PlanCategoryFilter>("all");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
-  useEffect(() => {
-    if (!authLoading && user?.status) {
-      setSelectedCategory(user.status === "corporate" ? "corporate" : "individual");
-    }
-  }, [user, authLoading]);
+  const isApprovedForPayment = !user || user.is_approved || user.role === "admin";
 
   useEffect(() => {
     async function fetchData() {
@@ -88,6 +86,11 @@ export default function MembershipPage() {
   const handleSubscribe = async (plan: PlanWithFeatures) => {
     if (!user) {
       router.push("/login");
+      return;
+    }
+
+    if (!isApprovedForPayment) {
+      alert("Your application is currently pending approval. You will receive an email when payment is available.");
       return;
     }
 
@@ -134,12 +137,16 @@ export default function MembershipPage() {
     }
   };
 
-  const availableCategories: Array<"individual" | "corporate"> =
-    !user || authLoading
-      ? ["individual", "corporate"]
-      : [user.status === "corporate" ? "corporate" : "individual"];
+  const categoryOptions: Array<{ value: PlanCategoryFilter; label: string }> = [
+    { value: "all", label: "All plans" },
+    { value: "individual", label: "Individual" },
+    { value: "corporate", label: "Corporate" },
+  ];
 
-  const filteredPlans = plans.filter((p) => p.category === selectedCategory);
+  const filteredPlans =
+    selectedCategory === "all"
+      ? plans
+      : plans.filter((p) => p.category === selectedCategory);
 
   const getPrice = (plan: PlanWithFeatures) =>
     billingCycle === "yearly" ? plan.yearly_price : plan.monthly_price;
@@ -206,7 +213,7 @@ export default function MembershipPage() {
         </div>
       </section>
 
-      <section className="bg-[#f7f1e8] py-14 text-[#11100e]">
+      <section id="plans" className="bg-[#f7f1e8] scroll-mt-20 py-14 text-[#11100e]">
         <div className="container mx-auto px-4">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -217,23 +224,21 @@ export default function MembershipPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              {availableCategories.length > 1 && (
-                <div className="inline-flex rounded-md border border-[#11100e]/12 bg-white/70 p-1">
-                  {(["individual", "corporate"] as const).map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`h-10 rounded px-5 text-sm font-semibold capitalize transition-colors ${
-                        selectedCategory === cat
-                          ? "bg-[#11100e] text-white"
-                          : "text-[#5e574b] hover:text-[#11100e]"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="inline-flex rounded-md border border-[#11100e]/12 bg-white/70 p-1">
+                {categoryOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setSelectedCategory(option.value)}
+                    className={`h-10 rounded px-4 text-sm font-semibold transition-colors sm:px-5 ${
+                      selectedCategory === option.value
+                        ? "bg-[#11100e] text-white"
+                        : "text-[#5e574b] hover:text-[#11100e]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
               <div className="inline-flex rounded-md border border-[#11100e]/12 bg-white/70 p-1">
                 <button
@@ -254,13 +259,22 @@ export default function MembershipPage() {
                       : "text-[#5e574b] hover:text-[#11100e]"
                   }`}
                 >
-                  Annual
+                  Annual (12 months)
                 </button>
               </div>
             </div>
           </div>
 
-          {user && (
+          {user && !isApprovedForPayment && (
+            <div className="mt-8 rounded-md border border-[#d8b861]/45 bg-white/75 p-5">
+              <h3 className="text-sm font-semibold text-[#11100e]">Application Pending Approval</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5e574b]">
+                Your application has been sent for approval. Once approved, you will receive an email with a payment link.
+              </p>
+            </div>
+          )}
+
+          {user && isApprovedForPayment && (
             <div className="mt-8 rounded-md border border-[#d8b861]/45 bg-white/75 p-5">
               <h3 className="text-sm font-semibold text-[#11100e]">Membership Required</h3>
               <p className="mt-2 text-sm leading-6 text-[#5e574b]">
@@ -321,7 +335,16 @@ export default function MembershipPage() {
                       )}
 
                       <div className="border-b pb-6" style={{ borderColor: plan.highlighted ? "rgba(255,255,255,0.14)" : "rgba(17,16,14,0.12)" }}>
-                        <h3 className="font-serif text-3xl font-normal">{plan.name}</h3>
+                        <div className="flex items-start justify-between gap-4">
+                          <h3 className="font-serif text-3xl font-normal">{plan.name}</h3>
+                          <span className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                            plan.highlighted
+                              ? "border-white/14 text-[#f0d27b]"
+                              : "border-[#11100e]/12 text-[#6b551f]"
+                          }`}>
+                            {plan.category}
+                          </span>
+                        </div>
                         {plan.description && (
                           <p className={`mt-3 text-sm leading-6 ${plan.highlighted ? "text-white/62" : "text-[#6c665d]"}`}>
                             {plan.description}
@@ -336,6 +359,11 @@ export default function MembershipPage() {
                         {billingCycle === "yearly" && saving > 0 && (
                           <p className={`mt-3 text-xs font-semibold ${plan.highlighted ? "text-[#f0d27b]" : "text-[#6b551f]"}`}>
                             Save £{saving.toLocaleString()} vs monthly
+                          </p>
+                        )}
+                        {billingCycle === "yearly" && (
+                          <p className={`mt-3 text-xs ${plan.highlighted ? "text-white/46" : "text-[#7b746b]"}`}>
+                            Billed once per year for 12 months of access
                           </p>
                         )}
                         {billingCycle === "monthly" && (
@@ -389,7 +417,7 @@ export default function MembershipPage() {
 
                       <button
                         onClick={() => handleSubscribe(plan)}
-                        disabled={isLoading}
+                        disabled={isLoading || !!user && !isApprovedForPayment || !hasStripeId}
                         className={`mt-auto h-12 rounded px-6 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                           plan.highlighted
                             ? "bg-[#d8b861] text-black hover:bg-[#f0d27b]"
@@ -400,6 +428,8 @@ export default function MembershipPage() {
                           ? "Processing..."
                           : !hasStripeId
                             ? "Coming soon"
+                            : user && !isApprovedForPayment
+                              ? "Pending approval"
                             : user
                               ? "Subscribe now"
                               : "Login to subscribe"}

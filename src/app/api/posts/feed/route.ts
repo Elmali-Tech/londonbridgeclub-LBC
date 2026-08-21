@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // First get the list of users that the current user follows
-    const { data: followedUsers, error: followedError } = await supabase
+    const { data: followedUsers, error: followedError } = await lbcData
       .from('connections')
       .select('following_id')
       .eq('follower_id', user.id.toString());
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const userIdsToFetch = [...followedUserIds, user.id.toString()];
 
     // Fetch admin posts with media
-    const { data: adminPosts, error: adminError } = await supabase
+    const { data: adminPosts, error: adminError } = await lbcData
       .from('posts')
       .select(`
         *,
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     let postsError = null;
     
     if (userIdsToFetch.length > 0) {
-      const { data: fetchedUserPosts, error: fetchError } = await supabase
+      const { data: fetchedUserPosts, error: fetchError } = await lbcData
         .from('posts')
         .select(`
           *,
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
     const uniqueUserIds = [...new Set(allPosts.map(post => post.user_id))];
     
     // Fetch user information for all post authors
-    const { data: users, error: usersError } = await supabase
+    const { data: users, error: usersError } = await lbcData
       .from('users')
       .select('id, full_name, headline, profile_image_key')
       .in('id', uniqueUserIds);
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     }));
 
     // Check which posts are liked by the current user
-    const { data: likedPosts, error: likeError } = await supabase
+    const { data: likedPosts, error: likeError } = await lbcData
       .from('post_likes')
       .select('post_id')
       .eq('user_id', user.id);

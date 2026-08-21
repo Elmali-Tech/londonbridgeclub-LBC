@@ -27,8 +27,8 @@ function PartnerLogo({ partner, variant }: { partner: PublicPartner; variant: 'm
     <div
       className={
         variant === 'marquee'
-          ? 'flex h-20 w-56 shrink-0 items-center justify-center px-6 text-center opacity-55 transition duration-300 hover:opacity-90 md:h-24 md:w-64'
-          : 'flex h-24 w-full items-center justify-center rounded-md border border-[#11100e]/10 bg-white/70 p-5 text-center'
+          ? 'flex h-24 w-64 shrink-0 items-center justify-center rounded-md border border-[#11100e]/10 bg-white p-5 text-center shadow-sm'
+          : 'flex h-24 w-full items-center justify-center rounded-md border border-[#11100e]/10 bg-white p-5 text-center shadow-sm'
       }
     >
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#5e574b]">
@@ -41,8 +41,8 @@ function PartnerLogo({ partner, variant }: { partner: PublicPartner; variant: 'm
     <div
       className={
         variant === 'marquee'
-          ? 'flex h-20 w-56 shrink-0 items-center justify-center overflow-hidden px-6 opacity-42 grayscale transition duration-300 hover:opacity-90 hover:grayscale-0 md:h-24 md:w-64'
-          : 'flex h-24 w-full items-center justify-center overflow-hidden rounded-md border border-[#11100e]/10 bg-white/70 p-5'
+          ? 'flex h-24 w-64 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[#11100e]/10 bg-white p-5 shadow-sm transition duration-300 hover:border-[#d8b861]/60'
+          : 'flex h-24 w-full items-center justify-center overflow-hidden rounded-md border border-[#11100e]/10 bg-white p-5 shadow-sm transition duration-300 hover:border-[#d8b861]/60'
       }
     >
       <Image
@@ -50,11 +50,8 @@ function PartnerLogo({ partner, variant }: { partner: PublicPartner; variant: 'm
         alt={partner.name}
         width={192}
         height={56}
-        className={
-          variant === 'marquee'
-            ? 'h-12 w-40 object-contain md:h-14 md:w-48'
-            : 'h-14 w-40 object-contain opacity-70 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0'
-        }
+        className="max-h-14 w-auto max-w-44 object-contain opacity-90 transition duration-300 hover:opacity-100"
+        style={{ height: 'auto' }}
         onError={() => {
           setImageSrc('');
         }}

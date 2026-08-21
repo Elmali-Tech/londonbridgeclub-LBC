@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 type Params = { params: Promise<{ planId: string }> };
 
@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'values must be an array' }, { status: 400 });
   }
 
-  const supabase = createClient();
+  const lbcData = createClient();
   const { planId: planIdStr } = await params;
   const planId = parseInt(planIdStr, 10);
 
@@ -33,7 +33,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     text_value: v.text_value ?? null,
   }));
 
-  const { error } = await supabase
+  const { error } = await lbcData
     .from('plan_feature_values')
     .upsert(upsertData, { onConflict: 'plan_id,feature_id' });
 

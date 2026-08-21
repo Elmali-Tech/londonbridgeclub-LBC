@@ -51,6 +51,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
 }
 
 export async function sendApprovalRequestEmail(userData: { fullName: string; email: string; status: string; linkedinUrl?: string }) {
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || "https://londonbridge.club").replace(/\/$/, "");
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
       <h2 style="color: #000; border-bottom: 2px solid #000; padding-bottom: 10px;">New Membership Application</h2>
@@ -79,7 +80,7 @@ export async function sendApprovalRequestEmail(userData: { fullName: string; ema
         Please log in to the admin panel to approve or reject this application.
       </p>
       <div style="margin-top: 20px;">
-        <a href="https://londonbridge.club/admin/users" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 4px;">Go to Admin Panel</a>
+        <a href="${baseUrl}/admin/users" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 4px;">Go to Admin Panel</a>
       </div>
     </div>
   `;
@@ -93,7 +94,8 @@ export async function sendApprovalRequestEmail(userData: { fullName: string; ema
 }
 
 export async function sendUserApprovedEmail(email: string, name: string) {
-  const paymentLink = "https://londonbridge.club/membership";
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || "https://londonbridge.club").replace(/\/$/, "");
+  const paymentLink = `${baseUrl}/membership`;
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
       <h2 style="color: #000;">Application Approved!</h2>
@@ -124,12 +126,13 @@ export async function sendInvitationEmail(email: string, invitationLink: string)
       <h2 style="color: #000;">You're Invited!</h2>
       <p>Hello,</p>
       <p>You have been invited to join the <strong>London Bridge Club</strong>, an exclusive network for professionals and organizations.</p>
-      <p>To accept your invitation and create your account, please click the button below:</p>
+      <p>To accept your invitation and submit your membership application, please click the button below:</p>
       <div style="margin-top: 30px; margin-bottom: 30px;">
-        <a href="${invitationLink}" style="background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 4px; display: inline-block;">Complete Registration</a>
+        <a href="${invitationLink}" style="background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 4px; display: inline-block;">Submit Application</a>
       </div>
       <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
       <p><a href="${invitationLink}">${invitationLink}</a></p>
+      <p>After you submit your application, our team will review it and send you a payment link once it is approved.</p>
       <p>We look forward to welcoming you to the club.</p>
       <p>Best regards,<br><strong>The London Bridge Club Team</strong></p>
     </div>

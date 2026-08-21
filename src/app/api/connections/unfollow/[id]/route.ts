@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function POST(
@@ -24,8 +24,8 @@ export async function POST(
       );
     }
 
-    // Supabase bağlantısı
-    const supabase = createClient();
+    // LbcData bağlantısı
+    const lbcData = createClient();
 
     // Takipten çıkarılacak kullanıcı ID'sini URL'den alıyoruz
     const followingId = parseInt(request.nextUrl.pathname.split('/')[3]); // /api/connections/unfollow/[id]
@@ -38,7 +38,7 @@ export async function POST(
     }
 
     // Takip ilişkisini sil
-    const { error } = await supabase
+    const { error } = await lbcData
       .from('connections')
       .delete()
       .eq('follower_id', authenticatedUser.id)

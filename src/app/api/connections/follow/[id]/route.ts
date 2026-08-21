@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function POST(
@@ -38,11 +38,11 @@ export async function POST(
       );
     }
 
-    // Supabase bağlantısı
-    const supabase = createClient();
+    // LbcData bağlantısı
+    const lbcData = createClient();
 
     // İlk olarak kullanıcı bilgisini debug için getir
-    const { data: debugUserData, error: debugUserError } = await supabase
+    const { data: debugUserData, error: debugUserError } = await lbcData
       .from('users')
       .select('*');
     
@@ -51,7 +51,7 @@ export async function POST(
     }
 
     // Takip edilen kullanıcının var olup olmadığını kontrol et
-    const { data: userExists, error: userError } = await supabase
+    const { data: userExists, error: userError } = await lbcData
       .from('users')
       .select('id')
       .eq('id', followingId)
@@ -73,7 +73,7 @@ export async function POST(
     }
 
     // Mevcut takip durumunu kontrol et
-    const { data: existingConnection } = await supabase
+    const { data: existingConnection } = await lbcData
       .from('connections')
       .select('id')
       .eq('follower_id', authenticatedUser.id)
@@ -87,7 +87,7 @@ export async function POST(
     }
 
     // Takip ilişkisi oluştur
-    const { data: connection, error: connectionError } = await supabase
+    const { data: connection, error: connectionError } = await lbcData
       .from('connections')
       .insert([
         {

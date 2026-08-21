@@ -2,16 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import Image from 'next/image';
 import Navbar from '@/app/components/Navbar';
 import CookieConsentModal from '@/app/components/CookieConsentModal';
 
 export default function Register() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { register, isLoading, error } = useAuth();
+  const { isLoading, error } = useAuth();
   
   const [token, setToken] = useState<string | null>(null);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
@@ -26,8 +24,10 @@ export default function Register() {
       setToken(tokenFromUrl);
       verifyToken(tokenFromUrl);
     } else {
-      setTokenError('Geçerli bir kayıt linki bulunamadı. Lütfen admin tarafından gönderilen linki kullanın.');
-      setTokenValid(false);
+      setToken(null);
+      setTokenValid(null);
+      setTokenEmail(null);
+      setTokenError(null);
       setIsCheckingToken(false);
     }
   }, [searchParams]);
@@ -146,7 +146,7 @@ export default function Register() {
     }
 
     // Email kontrolü - token'daki email ile form'daki email eşleşmeli
-    if (email !== tokenEmail) {
+    if (tokenEmail && email !== tokenEmail) {
       setFormError('Bu kayıt linki başka bir email adresi için oluşturulmuş');
       return;
     }
@@ -181,12 +181,6 @@ export default function Register() {
       const result = await response.json();
       
       if (result.user) {
-        if (result.token) {
-          // Otomatik login — token'ı kaydet
-          localStorage.setItem("authToken", result.token);
-          document.cookie = `authToken=${result.token}; path=/; max-age=${7 * 24 * 60 * 60}`;
-          router.push("/membership");
-        }
         setIsSubmitted(true);
         window.scrollTo(0, 0);
       } else {
@@ -197,6 +191,10 @@ export default function Register() {
       console.error(err);
     }
   };
+
+  const canShowForm = !isSubmitted && (!token || tokenValid === true);
+  const showTokenLoading = token && isCheckingToken;
+  const showTokenError = token && tokenValid === false && tokenError;
 
   return (
     <>
@@ -219,7 +217,7 @@ export default function Register() {
                 Join Our Network
               </h1>
               <p className="text-gray-600 text-lg font-light">
-                Create your exclusive membership account
+                Submit your membership application for approval
               </p>
             </div>
 
@@ -243,7 +241,7 @@ export default function Register() {
                   Your membership application has been <strong>sent for approval</strong>.
                 </p>
                 <div className="p-4 bg-white rounded border border-gray-200 text-sm text-gray-500 mb-8">
-                  Status: <span className="text-amber-600 font-semibold uppercase">Pending Approval</span>
+                  Status: <span className="text-amber-600 font-semibold uppercase">Onaya Gönderildi</span>
                 </div>
                 <p className="text-sm text-gray-500 mb-8">
                   Once your application is reviewed by our team, you will receive an email with instructions on how to complete your membership.
@@ -257,7 +255,20 @@ export default function Register() {
               </div>
             )}
 
-            <form className="space-y-6" onSubmit={handleSubmit} style={{ display: (tokenValid && !isSubmitted) ? 'block' : 'none' }}>
+            {showTokenLoading && (
+              <div className="p-6 mb-6 bg-gray-50 text-gray-600 rounded border border-gray-200 text-center">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-black mb-3"></div>
+                <p className="text-sm">Registration link is being verified...</p>
+              </div>
+            )}
+
+            {showTokenError && (
+              <div className="p-4 mb-6 bg-red-50 text-red-600 rounded text-sm border border-red-200">
+                {tokenError}
+              </div>
+            )}
+
+            <form className="space-y-6" onSubmit={handleSubmit} style={{ display: canShowForm ? 'block' : 'none' }}>
               {/* Account Type Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -636,7 +647,7 @@ export default function Register() {
                   disabled={isLoading}
                   className="w-full bg-white text-black border border-black px-8 py-3 text-sm font-medium tracking-wide hover:bg-black hover:text-white transition-colors uppercase"
                 >
-                  {isLoading ? 'Processing...' : 'Create Membership'}
+                  {isLoading ? 'Processing...' : 'Submit Application'}
                 </button>
               </div>
 

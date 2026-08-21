@@ -1,11 +1,25 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 import Cookies from "js-cookie";
 import { toast } from "react-hot-toast";
 import { getS3PublicUrl } from "@/lib/awsConfig";
+import RichTextTokens from "@/app/components/RichTextTokens";
+import { lbcData } from "@/lib/lbc-data";
+import { extractTextTokens } from "@/lib/textTokens";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiTarget } from "react-icons/fi";
+
+const COMMON_HASHTAGS = [
+  "urgent",
+  "followup",
+  "strategic",
+  "high-value",
+  "negotiation",
+  "partnership",
+  "expansion",
+  "renewal",
+];
 
 interface Opportunity {
   id: number;
@@ -14,7 +28,7 @@ interface Opportunity {
   service_detail: string;
   category: string;
   estimated_budget: string;
-  description: string;
+  description: string | null;
   image_key: string | null;
   is_active: boolean;
   customer_opportunity_id: number | null;
@@ -28,10 +42,17 @@ interface CustomerOpportunityOption {
   status: string;
 }
 
+type MentionUser = {
+  id: number;
+  full_name: string | null;
+  profile_image_key: string | null;
+};
+
 export default function AdminOpportunitiesPage() {
   const { user, isLoading } = useAuth();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [customerOpportunities, setCustomerOpportunities] = useState<CustomerOpportunityOption[]>([]);
+  const [users, setUsers] = useState<MentionUser[]>([]);
   const [loadingOpportunities, setLoadingOpportunities] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
@@ -50,11 +71,13 @@ export default function AdminOpportunitiesPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [tagging, setTagging] = useState<{ type: "@" | "#"; query: string; position: number } | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchOpportunities();
     fetchCustomerOpportunities();
+    fetchUsers();
   }, []);
 
   const fetchOpportunities = async () => {
@@ -65,9 +88,9 @@ export default function AdminOpportunitiesPage() {
       });
       const data = await response.json();
       if (data.success) {
-        setOpportunities(data.opportunities);
+        setOpportunities(Array.isArray(data.opportunities) ? data.opportunities : []);
       } else {
-        toast.error("Failed to fetch opportunities");
+        toast.error(data.error || "Failed to fetch opportunities");
       }
     } catch {
       toast.error("Failed to fetch opportunities");
@@ -91,6 +114,20 @@ export default function AdminOpportunitiesPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await lbcData
+        .from("users")
+        .select("id, full_name, profile_image_key")
+        .order("full_name", { ascending: true });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error("Failed to fetch mention users:", error);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
@@ -109,6 +146,36 @@ export default function AdminOpportunitiesPage() {
     }
   };
 
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const { value, selectionStart } = e.target;
+    setFormData((prev) => ({ ...prev, description: value }));
+
+    const textBeforeCursor = value.substring(0, selectionStart);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith("@")) {
+      setTagging({ type: "@", query: lastWord.substring(1), position: selectionStart });
+    } else if (lastWord.startsWith("#")) {
+      setTagging({ type: "#", query: lastWord.substring(1), position: selectionStart });
+    } else {
+      setTagging(null);
+    }
+  };
+
+  const handleSelectTag = (value: string) => {
+    if (!tagging) return;
+
+    const description = formData.description;
+    const beforeTag = description.substring(0, tagging.position - tagging.query.length - 1);
+    const afterTag = description.substring(tagging.position);
+    const normalizedValue = value.replace(/\s+/g, "");
+    const nextDescription = `${beforeTag}${tagging.type}${normalizedValue} ${afterTag}`;
+
+    setFormData((prev) => ({ ...prev, description: nextDescription }));
+    setTagging(null);
+  };
+
   const resetForm = () => {
     setFormData({
       title: "",
@@ -123,6 +190,7 @@ export default function AdminOpportunitiesPage() {
     setSelectedImage(null);
     setImagePreview(null);
     setEditingOpportunity(null);
+    setTagging(null);
     setShowCreateForm(false);
   };
 
@@ -177,6 +245,8 @@ export default function AdminOpportunitiesPage() {
     } else {
       setImagePreview(null);
     }
+    setSelectedImage(null);
+    setTagging(null);
     setShowCreateForm(true);
     setTimeout(() => {
       topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -203,6 +273,45 @@ export default function AdminOpportunitiesPage() {
     }
   };
 
+  const matchingMentionUsers = useMemo(() => {
+    if (!tagging || tagging.type !== "@") return [];
+    const query = tagging.query.toLowerCase();
+    return users.filter(
+      (candidate): candidate is MentionUser & { full_name: string } =>
+        Boolean(candidate.full_name?.toLowerCase().includes(query)),
+    );
+  }, [tagging, users]);
+
+  const matchingHashtags = useMemo(() => {
+    if (!tagging || tagging.type !== "#") return [];
+    const query = tagging.query.toLowerCase();
+    return COMMON_HASHTAGS.filter((hashtag) =>
+      hashtag.toLowerCase().includes(query),
+    );
+  }, [tagging]);
+
+  const renderTokenChips = (text?: string | null) => {
+    const tokens = extractTextTokens(text);
+    if (tokens.length === 0) return null;
+
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {tokens.map((token) => (
+          <span
+            key={`${token.type}-${token.value}`}
+            className={`rounded-lg px-2 py-1 text-[10px] font-black ${
+              token.type === "mention"
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300"
+                : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+            }`}
+          >
+            {token.value}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-100px)]">
@@ -217,7 +326,8 @@ export default function AdminOpportunitiesPage() {
   const filteredOpportunities = opportunities.filter(opp => 
     opp.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     opp.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    opp.category.toLowerCase().includes(searchQuery.toLowerCase())
+    opp.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    Boolean(opp.description?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   if (!hasAccess) return null;
@@ -305,7 +415,7 @@ export default function AdminOpportunitiesPage() {
                 required
               />
             </div>
-            <div className="space-y-1.5 md:col-span-2">
+            <div className="space-y-1.5 md:col-span-2 relative">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Linked CRM Record</label>
               <select
                 name="customer_opportunity_id"
@@ -360,11 +470,52 @@ export default function AdminOpportunitiesPage() {
               <textarea
                 name="description"
                 value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Detailed explanation of the opportunity..."
+                onChange={handleDescriptionChange}
+                placeholder="Detailed explanation of the opportunity... Use @ to mention members and # for topics."
                 rows={4}
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
               />
+              {tagging && (
+                <div className="absolute z-[70] mt-2 w-72 max-h-52 overflow-y-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl">
+                  {tagging.type === "@" ? (
+                    matchingMentionUsers.length > 0 ? (
+                      matchingMentionUsers.map((mentionUser) => (
+                        <button
+                          key={mentionUser.id}
+                          type="button"
+                          onClick={() => handleSelectTag(mentionUser.full_name)}
+                          className="flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-0 hover:bg-amber-50 dark:border-gray-800 dark:hover:bg-amber-900/20"
+                        >
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/15 text-xs font-black text-amber-600">
+                            {mentionUser.full_name[0]}
+                          </div>
+                          <span className="truncate text-sm font-bold text-gray-700 dark:text-gray-200">
+                            {mentionUser.full_name}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-xs font-bold text-gray-500">No members found</div>
+                    )
+                  ) : matchingHashtags.length > 0 ? (
+                    matchingHashtags.map((hashtag) => (
+                      <button
+                        key={hashtag}
+                        type="button"
+                        onClick={() => handleSelectTag(hashtag)}
+                        className="flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-0 hover:bg-amber-50 dark:border-gray-800 dark:hover:bg-amber-900/20"
+                      >
+                        <span className="font-black text-amber-600">#</span>
+                        <span className="truncate text-sm font-bold text-gray-700 dark:text-gray-200">
+                          {hashtag}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-xs font-bold text-gray-500">No topics found</div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Cover Image</label>
@@ -430,10 +581,10 @@ export default function AdminOpportunitiesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredOpportunities.map((opp) => (
             <div key={opp.id} className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden hover:shadow-md hover:border-gray-200 dark:hover:border-gray-700 transition-all duration-300 flex flex-col">
-              <div className="relative h-48 w-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div className="relative h-40 w-full bg-white dark:bg-gray-950 overflow-hidden border-b border-gray-100 dark:border-gray-800">
                 {opp.image_key ? (
                   <div className="relative h-full w-full p-4 flex items-center justify-center">
-                    <Image src={getS3PublicUrl(opp.image_key)} alt={opp.title} fill className="object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
+                    <Image src={getS3PublicUrl(opp.image_key)} alt={opp.title} fill className="object-contain p-6 group-hover:scale-105 transition-transform duration-500" />
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/10 to-amber-500/10">
@@ -471,8 +622,9 @@ export default function AdminOpportunitiesPage() {
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">{opp.estimated_budget}</span>
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl leading-relaxed">
-                    {opp.description}
+                    <RichTextTokens text={opp.description} fallback="No description provided." />
                   </p>
+                  {renderTokenChips(opp.description)}
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
@@ -507,9 +659,9 @@ export default function AdminOpportunitiesPage() {
                   <tr key={opp.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden relative flex-shrink-0 border border-gray-100 dark:border-gray-700 flex items-center justify-center p-1">
+                        <div className="w-16 h-16 rounded-xl bg-white dark:bg-gray-950 overflow-hidden relative flex-shrink-0 border border-gray-100 dark:border-gray-700 flex items-center justify-center">
                           {opp.image_key ? (
-                            <Image src={getS3PublicUrl(opp.image_key)} alt={opp.title} fill className="object-contain p-1" />
+                            <Image src={getS3PublicUrl(opp.image_key)} alt={opp.title} fill className="object-contain p-3" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
                               <FiTarget className="w-5 h-5 text-gray-400" />
@@ -523,12 +675,13 @@ export default function AdminOpportunitiesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
-	                      <p><span className="text-gray-400">Svc:</span> {opp.service_detail}</p>
-	                      <p><span className="text-gray-400">Cat:</span> {opp.category}</p>
+                        <p><span className="text-gray-400">Svc:</span> {opp.service_detail}</p>
+                        <p><span className="text-gray-400">Cat:</span> {opp.category}</p>
                       {opp.customer_opportunity_id && (
                         <p><span className="text-gray-400">CRM:</span> #{opp.customer_opportunity_id}</p>
                       )}
-	                      <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-1">{opp.estimated_budget}</p>
+                        <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-1">{opp.estimated_budget}</p>
+                        {renderTokenChips(opp.description)}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
 import { stripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST /api/subscription/cancel
 // Aboneliği dönem sonunda iptal eder (hemen kesmez)
@@ -11,9 +11,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { data: subscription, error } = await supabase
+  const { data: subscription, error } = await lbcData
     .from('subscriptions')
     .select('stripe_subscription_id, status')
     .eq('user_id', user.id)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     // DB'de status'u "active" bırak — kullanıcı dönem sonuna kadar erişmeye devam eder
     // Stripe webhook "customer.subscription.deleted" geldiğinde "canceled" olacak
     // Sadece cancel_at_period_end bilgisini kaydet
-    await supabase
+    await lbcData
       .from('subscriptions')
       .update({ updated_at: new Date().toISOString() })
       .eq('stripe_subscription_id', subscription.stripe_subscription_id);

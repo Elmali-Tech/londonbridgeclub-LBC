@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Fetch admin posts with author information
-    const { data: posts, error: postsError } = await supabase
+    const { data: posts, error: postsError } = await lbcData
       .from('posts')
       .select(`
         *,
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check which posts are liked by the current user
-    const { data: likedPosts, error: likeError } = await supabase
+    const { data: likedPosts, error: likeError } = await lbcData
       .from('post_likes')
       .select('post_id')
       .eq('user_id', user.id);
@@ -91,10 +91,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Create the admin post
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .insert({
         content,

@@ -66,7 +66,7 @@ export default function ImageUpload({
     setProgress(0);
   };
 
-  // Upload the file to Supabase Storage
+  // Upload the file to the configured asset storage.
   const handleSaveImage = async () => {
     if (!selectedFile) return;
 

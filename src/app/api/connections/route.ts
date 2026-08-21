@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST endpoint to create a new connection (follow a user)
 export async function POST(request: NextRequest) {
@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Check if connection already exists
-    const { data: existingConnection } = await supabase
+    const { data: existingConnection } = await lbcData
       .from('connections')
       .select('*')
       .eq('follower_id', session.id)
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new connection
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('connections')
       .insert([
         { 
@@ -101,11 +101,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Delete the connection
-    const { error } = await supabase
+    const { error } = await lbcData
       .from('connections')
       .delete()
       .eq('follower_id', session.id)

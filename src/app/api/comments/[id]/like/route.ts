@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST request - Yorum beğenme
 export async function POST(
@@ -28,11 +28,11 @@ export async function POST(
     // user_id'yi text olarak kullanıyoruz
     const userId = session.id.toString();
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the comment exists
-    const { data: comment, error: commentError } = await supabase
+    const { data: comment, error: commentError } = await lbcData
       .from('comments')
       .select('id, likes_count')
       .eq('id', commentId)
@@ -46,7 +46,7 @@ export async function POST(
     }
 
     // Kullanıcının daha önce yorumu beğenip beğenmediğini kontrol et
-    const { data: existingLike, error: likeCheckError } = await supabase
+    const { data: existingLike, error: likeCheckError } = await lbcData
       .from('comment_likes')
       .select('id')
       .eq('user_id', userId)
@@ -62,7 +62,7 @@ export async function POST(
     }
 
     // 1. comment_likes tablosuna ekle
-    const { error: insertError } = await supabase
+    const { error: insertError } = await lbcData
       .from('comment_likes')
       .insert({
         comment_id: commentId,
@@ -79,14 +79,14 @@ export async function POST(
     }
 
     // 2. likes_count alanını artır
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from('comments')
       .update({ likes_count: (comment.likes_count || 0) + 1 })
       .eq('id', commentId);
 
     if (updateError) {
       // likes_count güncellenemezse, eklenen beğeniyi geri al
-      await supabase
+      await lbcData
         .from('comment_likes')
         .delete()
         .eq('user_id', userId)
@@ -138,11 +138,11 @@ export async function DELETE(
     // user_id'yi text olarak kullanıyoruz
     const userId = session.id.toString();
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the comment exists
-    const { data: comment, error: commentError } = await supabase
+    const { data: comment, error: commentError } = await lbcData
       .from('comments')
       .select('id, likes_count')
       .eq('id', commentId)
@@ -156,7 +156,7 @@ export async function DELETE(
     }
 
     // Kullanıcının daha önce bu yorumu beğenip beğenmediğini kontrol et
-    const { data: existingLike, error: likeCheckError } = await supabase
+    const { data: existingLike, error: likeCheckError } = await lbcData
       .from('comment_likes')
       .select('id')
       .eq('user_id', userId)
@@ -172,7 +172,7 @@ export async function DELETE(
     }
 
     // 1. comment_likes tablosundan sil
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await lbcData
       .from('comment_likes')
       .delete()
       .eq('user_id', userId)
@@ -189,14 +189,14 @@ export async function DELETE(
     // 2. likes_count alanını azalt (0'ın altına düşmemesi için kontrol)
     const newLikeCount = Math.max(0, (comment.likes_count || 0) - 1);
     
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from('comments')
       .update({ likes_count: newLikeCount })
       .eq('id', commentId);
 
     if (updateError) {
       // likes_count güncellenemezse, silinen beğeniyi geri ekle
-      await supabase
+      await lbcData
         .from('comment_likes')
         .insert({
           user_id: userId,

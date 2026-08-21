@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
+import { LbcMember } from '@/lib/lbc-api';
+import { getLbcMembers } from '@/lib/lbc-auth';
+import { mapLbcMemberToDashboardMember } from '@/lib/lbc-members';
+
+function stringifyLbcInterests(interests: LbcMember['interests']) {
+  if (Array.isArray(interests)) return interests.join(' ');
+  return interests || '';
+}
+
+function lbcMemberSearchText(member: LbcMember) {
+  return [
+    member.name,
+    member.representative_name,
+    member.email,
+    member.member_id,
+    member.title,
+    member.about,
+    member.sector,
+    member.category,
+    member.type,
+    stringifyLbcInterests(member.interests),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase('tr-TR');
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,11 +47,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, users: [] });
     }
 
-    const searchTerm = query.trim().toLowerCase();
-    const supabase = createClient();
+    const searchTerm = query.trim().toLocaleLowerCase('tr-TR');
+
+    if (user.auth_provider === 'lbc') {
+      const members = await getLbcMembers();
+      const currentLbcRecordId = user.lbc_record_id || null;
+      const searchResults = members
+        .filter((member) => member.id !== currentLbcRecordId)
+        .filter((member) => lbcMemberSearchText(member).includes(searchTerm))
+        .slice(0, 10)
+        .map((member) => {
+          const dashboardMember = mapLbcMemberToDashboardMember(member);
+
+          return {
+            id: dashboardMember.id,
+            full_name: dashboardMember.full_name,
+            headline: dashboardMember.headline,
+            username: member.member_id || undefined,
+            location: dashboardMember.location,
+            industry: dashboardMember.industry,
+            profile_image_key: dashboardMember.profile_image_key,
+            matchedTags: dashboardMember.tags?.interests || [],
+            matchType: 'lbc',
+          };
+        });
+
+      return NextResponse.json({
+        success: true,
+        users: searchResults,
+        total: searchResults.length,
+      });
+    }
+
+    const lbcData = createClient();
 
     // Search in users table (name, headline, username, location, industry)
-    const { data: users, error: usersError } = await supabase
+    const { data: users, error: usersError } = await lbcData
       .from('users')
       .select('id, full_name, headline, username, location, industry, profile_image_key')
       .neq('id', user.id) // Exclude current user
@@ -37,7 +94,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Search in user_tags table
-    const { data: tagMatches, error: tagsError } = await supabase
+    const { data: tagMatches, error: tagsError } = await lbcData
       .from('user_tags')
       .select(`
         user_id,

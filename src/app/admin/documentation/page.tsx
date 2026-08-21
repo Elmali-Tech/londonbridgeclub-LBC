@@ -274,7 +274,7 @@ export default function DocumentationPage() {
                     ))}
                     <div className="p-4 bg-gray-50 dark:bg-gray-800/20 rounded-2xl mt-4 border border-dashed border-gray-200 dark:border-gray-800">
                       <p className="text-[10px] text-center font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                        Security enforced via Supabase Post-level RLS policies.
+                        Security enforced by LBC API authorization policies.
                       </p>
                     </div>
                   </div>
@@ -348,7 +348,7 @@ export default function DocumentationPage() {
                               PostgreSQL
                             </span>
                             <span className="text-[8px] text-gray-500">
-                              Supabase RLS
+                              LBC API authorization
                             </span>
                           </div>
                         </div>
@@ -391,7 +391,7 @@ export default function DocumentationPage() {
                   {
                     icon: FiShield,
                     title: "Auth Flow",
-                    desc: "Role-based access control leveraging Supabase Auth tokens.",
+                    desc: "Role-based access control using signed LBC sessions.",
                   },
                   {
                     icon: FiZap,

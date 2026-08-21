@@ -15,18 +15,23 @@ import {
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Cookies from "js-cookie";
+import RichTextTokens from "@/app/components/RichTextTokens";
+import { extractTextTokens } from "@/lib/textTokens";
 
 interface Opportunity {
-  id: number;
+  id: number | string;
   title: string;
   company: string;
   service_detail: string;
   category: string;
   estimated_budget: string;
-  description: string;
+  description: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
+  source?: "lbc-api";
+  can_record_interest?: boolean;
+  lbc_status?: string | null;
 }
 
 export default function OpportunityDetailPage() {
@@ -49,35 +54,37 @@ export default function OpportunityDetailPage() {
 
   const fetchOpportunity = async () => {
     try {
-      const response = await fetch("/api/admin/opportunities");
+      const token =
+        localStorage.getItem("authToken") || Cookies.get("authToken");
+      const response = await fetch(
+        `/api/dashboard/opportunities?id=${encodeURIComponent(id)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        },
+      );
       const data = await response.json();
       if (data.success) {
-        const foundOpportunity = data.opportunities.find(
-          (opp: Opportunity) => opp.id === parseInt(id),
-        );
+        const foundOpportunity = data.opportunity as Opportunity | undefined;
         if (foundOpportunity) {
           setOpportunity(foundOpportunity);
 
-          // Fetch the user's specific interest status
-          try {
-            const token =
-              localStorage.getItem("authToken") || Cookies.get("authToken");
-            const interestResponse = await fetch(
-              `/api/opportunities/${id}/interest`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
+          if (foundOpportunity.can_record_interest !== false) {
+            try {
+              const interestResponse = await fetch(
+                `/api/opportunities/${id}/interest`,
+                {
+                  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
                 },
-              },
-            );
-            if (interestResponse.ok) {
-              const interestData = await interestResponse.json();
-              if (interestData.success) {
-                setIsInterested(interestData.isInterested);
+              );
+              if (interestResponse.ok) {
+                const interestData = await interestResponse.json();
+                if (interestData.success) {
+                  setIsInterested(interestData.isInterested);
+                }
               }
+            } catch (e) {
+              console.error("Failed to fetch interest status", e);
             }
-          } catch (e) {
-            console.error("Failed to fetch interest status", e);
           }
         } else {
           setError("Opportunity not found");
@@ -93,6 +100,7 @@ export default function OpportunityDetailPage() {
   };
 
   const handleInterest = async () => {
+    if (opportunity?.can_record_interest === false) return;
     if (isInterested) return; // Prevent double submission
 
     setIsSubmitting(true);
@@ -124,6 +132,8 @@ export default function OpportunityDetailPage() {
       setIsSubmitting(false);
     }
   };
+
+  const descriptionTokens = extractTextTokens(opportunity?.description);
 
   return (
     <DashboardContainer
@@ -171,16 +181,23 @@ export default function OpportunityDetailPage() {
           <div className="bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
             {/* Image Header */}
             <div className="relative h-80 w-full">
-              <Image
-                src={
-                  opportunity.image_key
-                    ? getS3PublicUrl(opportunity.image_key)
-                    : "/images/placeholder.jpg"
-                }
-                alt={opportunity.title}
-                fill
-                className="object-cover"
-              />
+              {opportunity.image_key ? (
+                <Image
+                  src={getS3PublicUrl(opportunity.image_key)}
+                  alt={opportunity.title}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gray-950 text-white">
+                  <div className="text-center">
+                    <MdBusiness className="mx-auto mb-3 text-5xl text-amber-400" />
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-gray-300">
+                      LBC Opportunity
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-8">
                 <h1 className="text-white text-4xl font-bold mb-3">
@@ -254,8 +271,24 @@ export default function OpportunityDetailPage() {
                 </h2>
                 <div className="prose max-w-none">
                   <p className="text-gray-700 text-base leading-relaxed whitespace-pre-line">
-                    {opportunity.description}
+                    <RichTextTokens text={opportunity.description} fallback="No description provided." />
                   </p>
+                  {descriptionTokens.length > 0 && (
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {descriptionTokens.map((token) => (
+                        <span
+                          key={`${token.type}-${token.value}`}
+                          className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                            token.type === "mention"
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {token.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -263,15 +296,23 @@ export default function OpportunityDetailPage() {
               <div className="mt-8 pt-8 border-t border-gray-200">
                 <button
                   onClick={handleInterest}
-                  disabled={isSubmitting || isInterested}
+                  disabled={
+                    isSubmitting ||
+                    isInterested ||
+                    opportunity.can_record_interest === false
+                  }
                   className={`w-full md:w-auto px-8 py-3 font-semibold rounded-lg shadow-lg transition-all duration-300 transform flex items-center justify-center gap-2
                     ${
-                      isInterested
+                      opportunity.can_record_interest === false
+                        ? "bg-gradient-to-r from-gray-700 to-gray-800 text-white cursor-default shadow-gray-500/20"
+                        : isInterested
                         ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white cursor-default shadow-emerald-500/20"
                         : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none"
                     }`}
                 >
-                  {isSubmitting ? (
+                  {opportunity.can_record_interest === false ? (
+                    "Contact LBC Team"
+                  ) : isSubmitting ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       İşleniyor...
@@ -298,7 +339,9 @@ export default function OpportunityDetailPage() {
                   )}
                 </button>
                 <p className="text-gray-500 text-sm mt-4">
-                  {isInterested
+                  {opportunity.can_record_interest === false
+                    ? "Our team can help with next steps for this opportunity."
+                    : isInterested
                     ? "You have successfully expressed your interest! We will be in touch with you shortly."
                     : "If you're interested in this opportunity, click the button above to submit your request."}
                 </p>

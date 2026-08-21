@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { syncPriceFromStripe } from '@/lib/stripe';
 
 type Params = { params: Promise<{ id: string }> };
@@ -12,16 +12,16 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const supabase = createClient();
+  const lbcData = createClient();
 
   const [
     { data: plan, error: planError },
     { data: featureValues, error: fvError },
     { data: features, error: featuresError },
   ] = await Promise.all([
-    supabase.from('membership_plans').select('*').eq('id', id).single(),
-    supabase.from('plan_feature_values').select('id, feature_id, is_included, text_value').eq('plan_id', id),
-    supabase.from('plan_features').select('*').eq('is_active', true).order('sort_order'),
+    lbcData.from('membership_plans').select('*').eq('id', id).single(),
+    lbcData.from('plan_feature_values').select('id, feature_id, is_included, text_value').eq('plan_id', id),
+    lbcData.from('plan_features').select('*').eq('is_active', true).order('sort_order'),
   ]);
 
   if (planError) return NextResponse.json({ error: planError.message }, { status: 500 });
@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await req.json();
-  const supabase = createClient();
+  const lbcData = createClient();
 
   // Stripe Price ID değiştiyse otomatik fiyat çek
   if (body.stripe_monthly_price_id) {
@@ -71,7 +71,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (key in body) updateData[key] = body[key];
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await lbcData
     .from('membership_plans')
     .update(updateData)
     .eq('id', id)
@@ -89,9 +89,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { error } = await supabase
+  const { error } = await lbcData
     .from('membership_plans')
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq('id', id);

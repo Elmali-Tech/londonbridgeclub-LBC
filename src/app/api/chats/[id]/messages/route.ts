@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { createClient } from '@/lib/lbc-data';
+import { uploadBufferToAssetStorage } from '@/lib/storageUploadUtils';
 
 // GET - Sohbetteki mesajları getir
 export async function GET(
@@ -21,10 +21,10 @@ export async function GET(
 
     const resolvedParams = await params;
     const chatId = resolvedParams.id;
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Kullanıcının bu sohbete katılıp katılmadığını kontrol et
-    const { data: participant, error: participantError } = await supabase
+    const { data: participant, error: participantError } = await lbcData
       .from('chat_participants')
       .select('*')
       .eq('chat_id', chatId)
@@ -45,7 +45,7 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Simplified query without complex foreign key references
-    const { data: messages, error: messagesError } = await supabase
+    const { data: messages, error: messagesError } = await lbcData
       .from('messages')
       .select(`
         *,
@@ -68,7 +68,7 @@ export async function GET(
       (messages || []).map(async (message) => {
         let replyTo = null;
         if (message.reply_to_id) {
-          const { data: replyMessage } = await supabase
+          const { data: replyMessage } = await lbcData
             .from('messages')
             .select(`
               id,
@@ -89,7 +89,7 @@ export async function GET(
     );
 
     // Kullanıcının okuduğu mesajları getir
-    const { data: readMessages } = await supabase
+    const { data: readMessages } = await lbcData
       .from('message_reads')
       .select('message_id')
       .eq('user_id', user.id)
@@ -134,10 +134,10 @@ export async function POST(
 
     const resolvedParams = await params;
     const chatId = parseInt(resolvedParams.id);
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Kullanıcının bu sohbete katılıp katılmadığını kontrol et
-    const { data: participant, error: participantError } = await supabase
+    const { data: participant, error: participantError } = await lbcData
       .from('chat_participants')
       .select('*')
       .eq('chat_id', chatId)
@@ -171,21 +171,21 @@ export async function POST(
       const file = formData.get('file') as File | null;
       if (file) {
         try {
-          // Dosyayı Supabase Storage'a yükle
+          // Dosyayı yapılandırılmış varlık deposuna yükle.
           const timestamp = Date.now();
           const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
           const s3Key = `chat-files/${chatId}/${user.id}/${timestamp}_${sanitizedFileName}`;
           
           const buffer = Buffer.from(await file.arrayBuffer());
 
-          const uploadResult = await uploadBufferToSupabaseStorage(
+          const uploadResult = await uploadBufferToAssetStorage(
             s3Key,
             buffer,
             file.type
           );
 
           if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+            throw new Error(uploadResult.error || 'Asset storage upload failed');
           }
           
           fileKey = s3Key;
@@ -215,7 +215,7 @@ export async function POST(
     }
 
     // Mesajı kaydet
-    const { data: message, error: messageError } = await supabase
+    const { data: message, error: messageError } = await lbcData
       .from('messages')
       .insert({
         chat_id: chatId,

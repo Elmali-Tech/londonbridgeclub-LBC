@@ -9,11 +9,11 @@ import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 interface Event {
   id: number;
   title: string;
-  description: string;
-  location: string;
+  description: string | null;
+  location: string | null;
   event_date: string;
-  event_time: string;
-  category: string;
+  event_time: string | null;
+  category: string | null;
   image_key: string | null;
   is_active: boolean;
   created_at: string;
@@ -37,7 +37,8 @@ export default function EventsPage() {
       const response = await fetch('/api/admin/events');
       const data = await response.json();
       if (data.success) {
-        setEvents(data.events.filter((e: Event) => e.is_active));
+        const loadedEvents = Array.isArray(data.events) ? data.events : [];
+        setEvents(loadedEvents.filter((e: Event) => e.is_active));
       } else {
         setError('Failed to fetch events');
       }
@@ -50,7 +51,8 @@ export default function EventsPage() {
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchQuery.toLowerCase());
+                         event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         event.location?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = !categoryFilter || event.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
@@ -97,13 +99,13 @@ export default function EventsPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                     <div className="absolute bottom-4 left-4 right-4">
                       <h3 className="text-white text-xl font-bold line-clamp-2">{event.title}</h3>
-                      <p className="text-gray-200 text-sm flex items-center mt-1">{event.location}</p>
+                      <p className="text-gray-200 text-sm flex items-center mt-1">{event.location || 'TBA'}</p>
                     </div>
                   </div>
                   <div className="p-6">
                     <p className="text-gray-600 text-sm mb-2"><span className="font-semibold">Date:</span> {event.event_date}</p>
-                    <p className="text-gray-600 text-sm mb-2"><span className="font-semibold">Time:</span> {event.event_time}</p>
-                    <p className="text-gray-600 text-sm mb-2"><span className="font-semibold">Category:</span> {event.category}</p>
+                    <p className="text-gray-600 text-sm mb-2"><span className="font-semibold">Time:</span> {event.event_time || 'TBA'}</p>
+                    <p className="text-gray-600 text-sm mb-2"><span className="font-semibold">Category:</span> {event.category || 'General'}</p>
                     <p className="text-gray-600 text-sm mb-4 line-clamp-3">{event.description}</p>
                     <div className="flex items-center text-gray-500 text-sm">
                       <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -120,4 +122,4 @@ export default function EventsPage() {
       </div>
     </DashboardContainer>
   );
-} 
+}
