@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { syncPriceFromStripe } from '@/lib/stripe';
 import { createClient } from '@/lib/supabase';
 
 // POST /api/admin/plans/sync-prices — Tüm planların fiyatlarını Stripe'dan senkronize et
 export async function POST(req: NextRequest) {
-  const user = await validateSession(req);
-  if (!user?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (auth.response) return auth.response;
 
   const supabase = createClient();
   const { data: plans, error } = await supabase
