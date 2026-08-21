@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 
 // GET - List all partners (any status)
@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
+    const supabase = createClient();
     const { data: partners, error } = await supabase
       .from('partners')
       .select('*')
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Name and description are required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: partner, error } = await supabase
       .from('partners')
       .insert({
