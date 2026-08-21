@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { data: notes, error } = await supabase
       .from('customer_notes')
       .select('*')
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Note text is required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select('id')
