@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/permissions';
 import { sendReviewDecisionEmail, sendSystemNotification } from '@/lib/nodemailer';
 
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { id } = await params;
+    const supabase = createClient();
     const { data: existing, error: fetchError } = await supabase
       .from('partners')
       .select('id, name, status, submitted_by')
