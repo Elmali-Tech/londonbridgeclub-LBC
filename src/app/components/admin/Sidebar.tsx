@@ -87,6 +87,12 @@ const EventsIcon = () => (
   </svg>
 );
 
+const CustomersIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 21h18M6 21V7l6-4 6 4v14M10 21v-6h4v6M9 10h.01M9 14h.01M15 10h.01M15 14h.01" />
+  </svg>
+);
+
 const TrackingIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2v20M2 12h20M5.07 19.07l13.86-13.86M19.07 19.07L5.07 5.07" />
@@ -200,6 +206,12 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           href: "/admin/customer-pool",
           icon: CustomerPoolIcon,
           roles: ["admin", "opportunity_manager"],
+        },
+        {
+          name: "Customers",
+          href: "/admin/customers",
+          icon: CustomersIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
         },
         {
           name: "Process Tracking",
