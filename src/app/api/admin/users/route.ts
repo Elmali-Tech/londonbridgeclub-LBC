@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { validateSession, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { sendUserApprovedEmail, sendSystemNotification } from "@/lib/nodemailer";
+import { requireAdmin } from "@/lib/permissions";
 
 // POST - Admin creates a new member directly (public self-registration is closed)
 export async function POST(request: NextRequest) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: adminUser, error: adminError } = await supabase
-      .from("users")
-      .select("is_admin")
-      .eq("id", session.id)
-      .single();
-
-    if (adminError || !adminUser?.is_admin) {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+    const session = auth.user;
 
     const body = await request.json();
     const {

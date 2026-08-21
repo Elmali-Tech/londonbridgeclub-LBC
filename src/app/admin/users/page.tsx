@@ -93,12 +93,18 @@ export default function UsersPage() {
 
   const updateRole = async (userId: number, newRole: UserRole) => {
     try {
-      const { error } = await supabase
-        .from("users")
-        .update({ role: newRole })
-        .eq("id", userId);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to update role");
 
       setUsers(
         users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
@@ -111,14 +117,18 @@ export default function UsersPage() {
   
   const approveUser = async (userId: number) => {
     try {
+      const token = localStorage.getItem("authToken");
       const response = await fetch("/api/admin/approve-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ userId }),
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok) throw new Error(result.error);
       
       setUsers(
@@ -133,9 +143,14 @@ export default function UsersPage() {
   const deleteUser = async (userId: number) => {
     try {
       setIsDeleting(userId);
-      const { error } = await supabase.from("users").delete().eq("id", userId);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to delete user");
 
       setUsers(users.filter((u) => u.id !== userId));
       toast.success("User permanently removed");

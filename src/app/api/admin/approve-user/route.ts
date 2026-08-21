@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { sendUserApprovedEmail } from "@/lib/nodemailer";
+import { requireAdmin } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const body = await request.json();
     const { userId } = body;
 
