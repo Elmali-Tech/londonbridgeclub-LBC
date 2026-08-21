@@ -298,6 +298,54 @@ export interface Reminder {
   created_at: string;
 }
 
+export type ProjectStatus = "Planning" | "Active" | "On Hold" | "Completed" | "Cancelled";
+
+export interface Project {
+  id: number;
+  customer_id: number;
+  customer_opportunity_id?: number | null;
+  name: string;
+  description?: string | null;
+  owner_id?: number | null;
+  status: ProjectStatus;
+  progress_percentage: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  revenue?: string | null;
+  commission?: string | null;
+  risks?: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTeamMember {
+  id: number;
+  project_id: number;
+  user_id: number;
+  added_at: string;
+}
+
+export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
+export type TaskStatus = "To Do" | "In Progress" | "Done";
+export type TaskRecurrence = "Daily" | "Weekly" | "Monthly";
+
+export interface Task {
+  id: number;
+  title: string;
+  description?: string | null;
+  project_id?: number | null;
+  customer_id?: number | null;
+  assigned_to?: number | null;
+  due_date?: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  recurrence?: TaskRecurrence | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Session {
   id: number;
   user_id: number;
