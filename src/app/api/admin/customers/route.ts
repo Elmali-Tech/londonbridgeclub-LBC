@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const auth = await requireRole(request, [...CRM_ROLES]);
     if (auth.response) return auth.response;
 
+    const supabase = createClient();
     const { data: customers, error } = await supabase
       .from('customers')
       .select('*')
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Company name is required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: customer, error } = await supabase
       .from('customers')
       .insert({
