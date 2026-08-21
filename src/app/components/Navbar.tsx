@@ -89,11 +89,11 @@ export default function Navbar({ currentPage = 'default', showAuth = true, varia
       default:
         return (
           <div className="flex items-center gap-4">
-            <Link 
-              href="/register" 
+            <Link
+              href="/contact"
               className={`${secondaryButtonClass} transition-colors text-sm font-medium`}
             >
-              {isTransparent ? 'Apply for membership' : 'Register'}
+              {isTransparent ? 'Enquire about membership' : 'Enquire'}
             </Link>
             <Link 
               href="/login" 
@@ -249,11 +249,11 @@ export default function Navbar({ currentPage = 'default', showAuth = true, varia
                     ) : isTransparent ? (
                       <>
                         <Link
-                          href="/register"
+                          href="/contact"
                           className="block w-full rounded border border-[#d8b861]/70 bg-[#d8b861] px-4 py-2 text-center text-black transition-colors hover:bg-[#f0d27b]"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
-                          Apply for membership
+                          Enquire about membership
                         </Link>
                         <Link
                           href="/login"

@@ -201,10 +201,10 @@ export default function Contact() {
                 Email the club
               </a>
               <Link
-                href="/register"
+                href="/login"
                 className="inline-flex h-12 items-center justify-center rounded border border-white/25 px-7 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10"
               >
-                Apply for membership
+                Member sign in
               </Link>
             </div>
           </div>

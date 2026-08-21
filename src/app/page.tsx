@@ -131,10 +131,10 @@ export default function Home() {
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="/register"
+                  href="/contact"
                   className="inline-flex h-12 items-center justify-center rounded bg-[#d8b861] px-7 text-sm font-semibold text-black transition-colors hover:bg-[#f0d27b]"
                 >
-                  Apply for membership
+                  Enquire about membership
                 </Link>
                 <Link
                   href="/membership"
@@ -341,10 +341,10 @@ export default function Home() {
               </p>
             </div>
             <Link
-              href="/register"
+              href="/contact"
               className="inline-flex h-12 items-center justify-center rounded bg-[#d8b861] px-7 text-sm font-semibold text-black transition-colors hover:bg-[#f0d27b]"
             >
-              Apply for membership
+              Enquire about membership
             </Link>
           </div>
         </div>
