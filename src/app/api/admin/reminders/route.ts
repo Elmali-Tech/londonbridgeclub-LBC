@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const upcoming = searchParams.get('upcoming') === 'true';
 
+    const supabase = createClient();
     let query = supabase.from('reminders').select('*').order('due_date', { ascending: true });
     if (upcoming) {
       query = query.eq('is_completed', false);
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Title and due date are required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: reminder, error } = await supabase
       .from('reminders')
       .insert({
