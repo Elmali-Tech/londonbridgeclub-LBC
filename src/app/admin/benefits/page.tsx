@@ -5,10 +5,35 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
-import { Benefit } from "@/types/database";
+import { Benefit, BenefitStatus } from "@/types/database";
 import Cookies from "js-cookie";
 import { getAssetPublicUrl } from "@/lib/storage";
-import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiGift, FiStar } from "react-icons/fi";
+import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiGift, FiStar, FiSend, FiCheckCircle, FiRotateCcw, FiArchive } from "react-icons/fi";
+
+const STATUS_TABS: { label: string; value: BenefitStatus | "all" }[] = [
+  { label: "All", value: "all" },
+  { label: "Draft", value: "draft" },
+  { label: "Pending Review", value: "pending_review" },
+  { label: "Revision Requested", value: "revision_requested" },
+  { label: "Published", value: "published" },
+  { label: "Archived", value: "archived" },
+];
+
+const STATUS_BADGE_STYLES: Record<BenefitStatus, string> = {
+  draft: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700",
+  pending_review: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800",
+  revision_requested: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800",
+  published: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800",
+  archived: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700",
+};
+
+const STATUS_LABELS: Record<BenefitStatus, string> = {
+  draft: "Draft",
+  pending_review: "Pending Review",
+  revision_requested: "Revision Requested",
+  published: "Published",
+  archived: "Archived",
+};
 
 export default function AdminBenefitsPage() {
   const { user, isLoading } = useAuth();
@@ -20,7 +45,9 @@ export default function AdminBenefitsPage() {
   
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [statusTab, setStatusTab] = useState<BenefitStatus | "all">("all");
+  const [actioningId, setActioningId] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -31,7 +58,6 @@ export default function AdminBenefitsPage() {
     discount_code: "",
     valid_until: "",
     terms_conditions: "",
-    is_active: true,
     premium: false,
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -99,7 +125,6 @@ export default function AdminBenefitsPage() {
       discount_code: "",
       valid_until: "",
       terms_conditions: "",
-      is_active: true,
       premium: false,
     });
     setSelectedImage(null);
@@ -162,7 +187,6 @@ export default function AdminBenefitsPage() {
       discount_code: benefit.discount_code || "",
       valid_until: benefit.valid_until || "",
       terms_conditions: benefit.terms_conditions || "",
-      is_active: benefit.is_active,
       premium: benefit.premium || false,
     });
 
@@ -197,6 +221,53 @@ export default function AdminBenefitsPage() {
     }
   };
 
+  const runWorkflowAction = async (
+    benefitId: number,
+    action: "submit" | "approve" | "request-revision" | "archive",
+    body?: Record<string, unknown>
+  ) => {
+    try {
+      setActioningId(benefitId);
+      const token = localStorage.getItem("authToken") || Cookies.get("authToken");
+      const response = await fetch(`/api/admin/benefits/${benefitId}/${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Action failed");
+
+      const messages: Record<typeof action, string> = {
+        submit: "Submitted for review",
+        approve: "Approved & published",
+        "request-revision": "Revision requested",
+        archive: "Benefit archived",
+      };
+      toast.success(messages[action]);
+      fetchBenefits();
+    } catch (error: any) {
+      toast.error(error.message || "Action failed");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleSubmitForReview = (benefitId: number) => runWorkflowAction(benefitId, "submit");
+
+  const handleApprove = (benefitId: number) => runWorkflowAction(benefitId, "approve");
+
+  const handleRequestRevision = (benefitId: number) => {
+    const notes = window.prompt("What needs to change before this can be published?");
+    if (!notes || !notes.trim()) return;
+    runWorkflowAction(benefitId, "request-revision", { notes: notes.trim() });
+  };
+
+  const handleArchive = (benefitId: number) => runWorkflowAction(benefitId, "archive");
+
   const getCategoryBadge = (category: string) => {
     const styles = {
       discount: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800",
@@ -217,11 +288,13 @@ export default function AdminBenefitsPage() {
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
-  
-  const filteredBenefits = benefits.filter(ben => 
-    ben.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const isAdmin = userRole === "admin";
+
+  const filteredBenefits = benefits.filter(ben =>
+    (statusTab === "all" || ben.status === statusTab) &&
+    (ben.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     ben.partner_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ben.category.toLowerCase().includes(searchQuery.toLowerCase())
+    ben.category.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   if (!hasAccess) return null;
@@ -277,6 +350,22 @@ export default function AdminBenefitsPage() {
             <FiPlus /> New Benefit
           </button>
         </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setStatusTab(tab.value)}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${
+              statusTab === tab.value
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {showCreateForm && (
@@ -406,16 +495,12 @@ export default function AdminBenefitsPage() {
             </div>
 
             <div className="space-y-1.5 md:col-span-2 grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl">
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={handleInputChange}
-                  className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                />
-                <label htmlFor="is_active" className="text-sm font-bold text-gray-700 dark:text-gray-300">Flag as Active</label>
+              <div className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {editingBenefit
+                    ? "Visibility is controlled by the review workflow — submit for review below."
+                    : "New benefits start as a Draft. Submit for review once ready."}
+                </p>
               </div>
               <div className="flex items-center gap-3 p-3 border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-900/10 rounded-xl">
                 <input
@@ -483,11 +568,9 @@ export default function AdminBenefitsPage() {
                 </div>
                 
                 <div className="absolute top-4 right-4 flex gap-1.5 flex-col items-end">
-                  {!benefit.is_active && (
-                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg bg-red-500/90 text-white backdrop-blur shadow-sm">
-                      Suspended
-                    </span>
-                  )}
+                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg backdrop-blur shadow-sm ${STATUS_BADGE_STYLES[benefit.status]}`}>
+                    {STATUS_LABELS[benefit.status]}
+                  </span>
                   {benefit.premium && (
                     <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 rounded-lg bg-amber-500/90 text-white backdrop-blur shadow-sm">
                       <FiStar /> VIP Tier
@@ -524,22 +607,69 @@ export default function AdminBenefitsPage() {
                   <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mt-3 pt-2 leading-relaxed">
                     {benefit.description}
                   </p>
+
+                  {benefit.status === "revision_requested" && benefit.revision_notes && (
+                    <div className="mt-3 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-lg text-xs text-amber-800 dark:text-amber-400">
+                      <strong>Revision needed:</strong> {benefit.revision_notes}
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                  {benefit.valid_until ? (
-                    <span className="text-xs font-bold text-gray-400">Valid: {new Date(benefit.valid_until).toLocaleDateString()}</span>
-                  ) : (
-                    <span className="text-xs font-bold text-gray-400">Timeless</span>
-                  )}
-                  
-                  <div className="flex gap-2">
-                    <button onClick={() => handleEdit(benefit)} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors">
-                      <FiEdit2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(benefit.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
+                <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    {benefit.valid_until ? (
+                      <span className="text-xs font-bold text-gray-400">Valid: {new Date(benefit.valid_until).toLocaleDateString()}</span>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-400">Timeless</span>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(benefit)} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors">
+                        <FiEdit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDelete(benefit.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(benefit.status === "draft" || benefit.status === "revision_requested") && (
+                      <button
+                        onClick={() => handleSubmitForReview(benefit.id)}
+                        disabled={actioningId === benefit.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <FiSend className="w-3.5 h-3.5" /> Submit for Review
+                      </button>
+                    )}
+                    {benefit.status === "pending_review" && isAdmin && (
+                      <>
+                        <button
+                          onClick={() => handleApprove(benefit.id)}
+                          disabled={actioningId === benefit.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <FiCheckCircle className="w-3.5 h-3.5" /> Approve & Publish
+                        </button>
+                        <button
+                          onClick={() => handleRequestRevision(benefit.id)}
+                          disabled={actioningId === benefit.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <FiRotateCcw className="w-3.5 h-3.5" /> Request Revision
+                        </button>
+                      </>
+                    )}
+                    {benefit.status === "published" && isAdmin && (
+                      <button
+                        onClick={() => handleArchive(benefit.id)}
+                        disabled={actioningId === benefit.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <FiArchive className="w-3.5 h-3.5" /> Archive
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -584,14 +714,56 @@ export default function AdminBenefitsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1.5">
+                        <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ${STATUS_BADGE_STYLES[benefit.status]}`}>
+                          {STATUS_LABELS[benefit.status]}
+                        </span>
                         <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ${getCategoryBadge(benefit.category)}`}>
                           {benefit.category}
                         </span>
                         {benefit.premium && <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-500 flex items-center"><FiStar className="mr-0.5"/> Premium Tier</span>}
+                        {benefit.status === "revision_requested" && benefit.revision_notes && (
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400 max-w-[220px]">{benefit.revision_notes}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {(benefit.status === "draft" || benefit.status === "revision_requested") && (
+                          <button
+                            onClick={() => handleSubmitForReview(benefit.id)}
+                            disabled={actioningId === benefit.id}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <FiSend className="w-3 h-3" /> Submit
+                          </button>
+                        )}
+                        {benefit.status === "pending_review" && isAdmin && (
+                          <>
+                            <button
+                              onClick={() => handleApprove(benefit.id)}
+                              disabled={actioningId === benefit.id}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <FiCheckCircle className="w-3 h-3" /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleRequestRevision(benefit.id)}
+                              disabled={actioningId === benefit.id}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <FiRotateCcw className="w-3 h-3" /> Revise
+                            </button>
+                          </>
+                        )}
+                        {benefit.status === "published" && isAdmin && (
+                          <button
+                            onClick={() => handleArchive(benefit.id)}
+                            disabled={actioningId === benefit.id}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <FiArchive className="w-3 h-3" /> Archive
+                          </button>
+                        )}
                          <button onClick={() => handleEdit(benefit)} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors">
                           <FiEdit2 className="w-4 h-4" />
                         </button>
