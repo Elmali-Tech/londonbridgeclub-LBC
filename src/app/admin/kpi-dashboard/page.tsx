@@ -152,14 +152,19 @@ export default function KPIDashboardPage() {
       .slice(0, 5); // Just top 5 for better UI
 
     // Pipeline Data
+    const normalizeStage = (stage?: string | null) => {
+      if (!stage || stage === "Prospect") return "Lead";
+      if (stage === "Opportunity") return "Qualified";
+      return stage;
+    };
     const pipelineStages = ["Lead", "Qualified", "Proposal", "Negotiation"];
     const pipelineData = pipelineStages.map((stage) => ({
       name: stage,
       count: opportunities.filter(
-        (opp) => opp.deal_stage === stage && opp.status === "Active",
+        (opp) => normalizeStage(opp.deal_stage) === stage && opp.status === "Active",
       ).length,
       volume: opportunities
-        .filter((opp) => opp.deal_stage === stage && opp.status === "Active")
+        .filter((opp) => normalizeStage(opp.deal_stage) === stage && opp.status === "Active")
         .reduce((acc, opp) => acc + parseVolume(opp.estimated_deal_size), 0),
     }));
 

@@ -93,6 +93,27 @@ const CustomersIcon = () => (
   </svg>
 );
 
+const MeetingsIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
+
+const ProposalsIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 2v6h6M9 13h6M9 17h6" />
+  </svg>
+);
+
+const RemindersIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 01-3.46 0" />
+  </svg>
+);
+
 const TrackingIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2v20M2 12h20M5.07 19.07l13.86-13.86M19.07 19.07L5.07 5.07" />
@@ -211,6 +232,24 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           name: "Customers",
           href: "/admin/customers",
           icon: CustomersIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
+        },
+        {
+          name: "Meetings",
+          href: "/admin/meetings",
+          icon: MeetingsIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
+        },
+        {
+          name: "Proposals",
+          href: "/admin/proposals",
+          icon: ProposalsIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
+        },
+        {
+          name: "Reminders",
+          href: "/admin/reminders",
+          icon: RemindersIcon,
           roles: ["admin", "opportunity_manager", "sales_member"],
         },
         {
