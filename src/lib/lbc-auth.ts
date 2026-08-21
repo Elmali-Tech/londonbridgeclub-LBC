@@ -59,7 +59,6 @@ type LbcRegisterInput = {
 
 const LBC_USER_ID_BASE = 1_000_000_000;
 const LBC_USER_ID_RANGE = 900_000_000;
-const REPOSITORY_ADMIN_EMAILS = ["laavanjanlaa@gmail.com"];
 
 function base64UrlEncode(value: string) {
   return Buffer.from(value).toString("base64url");
@@ -226,15 +225,12 @@ export function getLbcStableUserId(value: string) {
 }
 
 function normalizeRole(member: LbcMember): UserRole {
-  const adminEmails = new Set([
-    ...REPOSITORY_ADMIN_EMAILS.map((email) => normalizeMemberEmail(email)),
-    ...(process.env.LBC_ADMIN_EMAILS || process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((email) => normalizeMemberEmail(email))
-      .filter(Boolean),
-  ]);
+  const adminEmails = (process.env.LBC_ADMIN_EMAILS || process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => normalizeMemberEmail(email))
+    .filter(Boolean);
 
-  return adminEmails.has(normalizeMemberEmail(member.email)) ? "admin" : "viewer";
+  return adminEmails.includes(normalizeMemberEmail(member.email)) ? "admin" : "viewer";
 }
 
 function isActiveSubscription(member: LbcMember) {
