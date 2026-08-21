@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { requireAdmin } from '@/lib/permissions';
+import { requireAdmin, requireRole } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
 import { deleteFileFromS3 } from '@/lib/s3UploadUtils';
@@ -15,7 +15,7 @@ const canAttemptLegacyS3Delete = () =>
 // GET - Get specific benefit
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAdmin(request);
+    const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
     const resolvedParams = await params;
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // PUT - Update benefit
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAdmin(request);
+    const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
     const resolvedParams = await params;
@@ -67,7 +67,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const discount_code = formData.get('discount_code') as string || null;
     const valid_until = formData.get('valid_until') as string || null;
     const terms_conditions = formData.get('terms_conditions') as string || null;
-    const is_active = formData.get('is_active') === 'true';
 
     // Handle image upload
     let imageKey = existingBenefit.image_key;
@@ -119,7 +118,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         discount_code,
         valid_until,
         terms_conditions,
-        is_active,
         image_key: imageKey,
       })
       .eq('id', resolvedParams.id)

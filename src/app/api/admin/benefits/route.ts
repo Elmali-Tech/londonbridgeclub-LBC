@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { requireAdmin } from '@/lib/permissions';
+import { requireRole } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
 import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
@@ -8,7 +8,7 @@ import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 // GET - List all benefits
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin(request);
+    const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
     const { data: benefits, error } = await supabase
@@ -31,11 +31,11 @@ export async function GET(request: NextRequest) {
 // POST - Create new benefit
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin(request);
+    const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
     const formData = await request.formData();
-    
+
     // Extract benefit data
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
     const discount_code = formData.get('discount_code') as string || null;
     const valid_until = formData.get('valid_until') as string || null;
     const terms_conditions = formData.get('terms_conditions') as string || null;
-    const is_active = formData.get('is_active') === 'true';
     const premium = formData.get('premium') === 'true';
 
     // Handle image upload
@@ -91,7 +90,8 @@ export async function POST(request: NextRequest) {
         discount_code,
         valid_until,
         terms_conditions,
-        is_active,
+        is_active: false,
+        status: 'draft',
         premium,
         image_key: imageKey,
       })

@@ -143,6 +143,45 @@ export async function sendInvitationEmail(email: string, invitationLink: string)
   });
 }
 
+export async function sendReviewDecisionEmail(
+  email: string,
+  name: string,
+  decision: "approved" | "revision_requested",
+  notes?: string
+) {
+  const isApproved = decision === "approved";
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #000;">${isApproved ? "Your Submission Was Approved & Published" : "Revision Requested"}</h2>
+      <p>Dear ${name},</p>
+      <p>
+        ${isApproved
+          ? "The benefit you submitted for review has been approved and is now live for members."
+          : "The benefit you submitted for review needs a revision before it can be published."}
+      </p>
+      ${notes ? `
+      <div style="background-color: #f9f9f9; padding: 16px; border-radius: 8px; margin-top: 16px;">
+        <p style="margin: 0;"><strong>Reviewer notes:</strong></p>
+        <p style="margin: 8px 0 0;">${notes}</p>
+      </div>
+      ` : ""}
+      <p style="margin-top: 24px;">
+        ${isApproved
+          ? "No further action is needed."
+          : "Please update the submission and resubmit it for review."}
+      </p>
+      <p>Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: '"LBC System" <muhammed@elmalitech.com>',
+    to: email,
+    subject: isApproved ? "Your benefit submission was approved & published" : "Revision requested on your benefit submission",
+    html: htmlBody,
+  });
+}
+
 export async function sendSystemNotification(action: string, details: string) {
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
