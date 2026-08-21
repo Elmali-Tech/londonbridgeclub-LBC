@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireAdmin, requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { data: proposal, error } = await supabase.from('proposals').select('*').eq('id', id).single();
 
     if (error || !proposal) {
@@ -43,6 +44,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, error: 'Customer and title are required' }, { status: 400 });
     }
 
+    const supabase = createClient();
     const { data: proposal, error } = await supabase
       .from('proposals')
       .update({
@@ -80,6 +82,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabase = createClient();
     const { error } = await supabase.from('proposals').delete().eq('id', id);
 
     if (error) {
