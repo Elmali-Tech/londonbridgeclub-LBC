@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
 import { deleteFileFromS3 } from '@/lib/s3UploadUtils';
@@ -15,21 +15,8 @@ const canAttemptLegacyS3Delete = () =>
 // GET - Get specific benefit
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', session.id)
-      .single();
-
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     const { data: benefit, error } = await supabase
@@ -53,21 +40,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // PUT - Update benefit
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', session.id)
-      .single();
-
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     // Get existing benefit data
@@ -167,21 +141,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 // DELETE - Delete benefit
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', session.id)
-      .single();
-
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     // Get benefit data to delete associated image

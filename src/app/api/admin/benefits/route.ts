@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
 import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
@@ -8,35 +8,20 @@ import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 // GET - List all benefits
 export async function GET(request: NextRequest) {
   try {
-    const session = await validateSession(request);
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const { data: benefits, error } = await supabase
+      .from('benefits')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    // Check if user is admin and fetch benefits in parallel
-    const [userResult, benefitsResult] = await Promise.all([
-      supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', session.id)
-        .single(),
-      supabase
-        .from('benefits')
-        .select('*')
-        .order('created_at', { ascending: false })
-    ]);
-
-    if (userResult.error || !userResult.data?.is_admin) {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
-
-    if (benefitsResult.error) {
-      console.error('Error fetching benefits:', benefitsResult.error);
+    if (error) {
+      console.error('Error fetching benefits:', error);
       return NextResponse.json({ success: false, error: 'Failed to fetch benefits' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, benefits: benefitsResult.data });
+    return NextResponse.json({ success: true, benefits });
   } catch (error) {
     console.error('GET /api/admin/benefits error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
@@ -46,21 +31,8 @@ export async function GET(request: NextRequest) {
 // POST - Create new benefit
 export async function POST(request: NextRequest) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', session.id)
-      .single();
-
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const formData = await request.formData();
     
