@@ -25,7 +25,21 @@ import {
   FiMail,
   FiCalendar,
   FiTrash2,
+  FiPlus,
+  FiUserPlus,
 } from "react-icons/fi";
+
+const emptyMemberForm = {
+  fullName: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
+  status: "personal" as "personal" | "corporate",
+  role: "viewer" as UserRole,
+  linkedinUrl: "",
+  websiteUrl: "",
+  dateOfBirth: "",
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -33,6 +47,9 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [memberForm, setMemberForm] = useState(emptyMemberForm);
 
   const fetchUsers = async () => {
     try {
@@ -126,6 +143,71 @@ export default function UsersPage() {
       toast.error("Failed to disconnect user");
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const handleOpenModal = () => {
+    setMemberForm(emptyMemberForm);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => setMemberForm(emptyMemberForm), 300);
+  };
+
+  const handleMemberFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setMemberForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCreateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!memberForm.fullName || !memberForm.email || !memberForm.password) {
+      toast.error("Full name, email and password are required");
+      return;
+    }
+
+    if (memberForm.password !== memberForm.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email: memberForm.email,
+          password: memberForm.password,
+          fullName: memberForm.fullName,
+          status: memberForm.status,
+          role: memberForm.role,
+          linkedinUrl: memberForm.linkedinUrl || undefined,
+          websiteUrl: memberForm.websiteUrl || undefined,
+          dateOfBirth: memberForm.dateOfBirth || undefined,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error || "Failed to create member");
+
+      toast.success("Member created and approved successfully");
+      handleCloseModal();
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create member");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -227,7 +309,146 @@ export default function UsersPage() {
               <FiList /> List
             </button>
           </div>
+
+          <button
+            onClick={handleOpenModal}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm transition-colors"
+          >
+            <FiPlus /> Add Member
+          </button>
         </div>
+
+        {isModalOpen && (
+          <div className="mb-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <FiUserPlus className="text-rose-600" /> Add Member
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Public registration is closed — create and approve a member account directly.
+              </p>
+            </div>
+            <form onSubmit={handleCreateMember} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Full Name *</label>
+                <input
+                  name="fullName"
+                  value={memberForm.fullName}
+                  onChange={handleMemberFormChange}
+                  required
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Email *</label>
+                <input
+                  name="email"
+                  type="email"
+                  value={memberForm.email}
+                  onChange={handleMemberFormChange}
+                  required
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Password *</label>
+                <input
+                  name="password"
+                  type="password"
+                  value={memberForm.password}
+                  onChange={handleMemberFormChange}
+                  required
+                  minLength={6}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Confirm Password *</label>
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  value={memberForm.confirmPassword}
+                  onChange={handleMemberFormChange}
+                  required
+                  minLength={6}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Membership Type</label>
+                <select
+                  name="status"
+                  value={memberForm.status}
+                  onChange={handleMemberFormChange}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                >
+                  <option value="personal">Individual</option>
+                  <option value="corporate">Corporate</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Access Role</label>
+                <select
+                  name="role"
+                  value={memberForm.role}
+                  onChange={handleMemberFormChange}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="sales_member">Sales Member</option>
+                  <option value="opportunity_manager">Opp Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">LinkedIn URL</label>
+                <input
+                  name="linkedinUrl"
+                  type="url"
+                  value={memberForm.linkedinUrl}
+                  onChange={handleMemberFormChange}
+                  placeholder="https://linkedin.com/in/username"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Date of Birth</label>
+                <input
+                  name="dateOfBirth"
+                  type="date"
+                  value={memberForm.dateOfBirth}
+                  onChange={handleMemberFormChange}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 md:col-span-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition disabled:opacity-50"
+                >
+                  {isSubmitting ? "Creating..." : "Create Member"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
