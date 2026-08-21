@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
-import { validateSession } from "@/lib/auth";
+import { requireRole } from "@/lib/permissions";
 
 const normalizeDealStage = (stage?: string | null) => {
   if (!stage || stage === "Prospect") return "Lead";
@@ -10,13 +10,8 @@ const normalizeDealStage = (stage?: string | null) => {
 
 export async function GET(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager", "sales_member"]);
+    if (auth.response) return auth.response;
 
     const supabase = createClient();
     const { data: opportunities, error } = await supabase
@@ -52,37 +47,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager"]);
+    if (auth.response) return auth.response;
+    const session = auth.user;
 
     const supabase = createClient();
-
-    // Check if user has permission to create
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (
-      userError ||
-      !user ||
-      (user.role !== "admin" && user.role !== "opportunity_manager")
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Forbidden: You do not have permission to create opportunities",
-        },
-        { status: 403 },
-      );
-    }
 
     const body = await request.json();
     const {

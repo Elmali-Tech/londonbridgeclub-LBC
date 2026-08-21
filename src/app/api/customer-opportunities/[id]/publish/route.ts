@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
-import { validateSession } from "@/lib/auth";
-
-const canManageCustomerOpportunities = (role?: string | null, isAdmin?: boolean) =>
-  isAdmin || role === "admin" || role === "opportunity_manager";
+import { requireRole } from "@/lib/permissions";
 
 const normalizeStage = (stage?: string | null) => {
   if (!stage) return "Lead";
@@ -18,13 +15,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await validateSession(request);
-    if (!session || !canManageCustomerOpportunities(session.role, session.is_admin)) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: Insufficient permissions" },
-        { status: 403 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager"]);
+    if (auth.response) return auth.response;
 
     const { id } = await params;
     const customerOpportunityId = Number(id);

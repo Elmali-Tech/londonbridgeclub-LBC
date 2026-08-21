@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
-import { validateSession } from "@/lib/auth";
-
-const canViewInterests = (role?: string | null, isAdmin?: boolean) =>
-  isAdmin ||
-  role === "admin" ||
-  role === "opportunity_manager" ||
-  role === "sales_member";
+import { requireRole } from "@/lib/permissions";
 
 type InterestRow = {
   id: number;
@@ -33,13 +27,8 @@ type InterestOpportunity = {
 
 export async function GET(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session || !canViewInterests(session.role, session.is_admin)) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: Insufficient permissions" },
-        { status: 403 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager", "sales_member"]);
+    if (auth.response) return auth.response;
 
     const supabase = createClient();
     const { data: interests, error } = await supabase.rpc(

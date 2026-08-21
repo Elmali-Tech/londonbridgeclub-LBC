@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
-import { validateSession } from "@/lib/auth";
+import { requireAdmin, requireRole } from "@/lib/permissions";
 
 const normalizeDealStage = (stage?: string | null) => {
   if (!stage || stage === "Prospect") return "Lead";
@@ -13,33 +13,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager"]);
+    if (auth.response) return auth.response;
 
     const supabase = createClient();
-
-    // Check permission
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (
-      userError ||
-      !user ||
-      (user.role !== "admin" && user.role !== "opportunity_manager")
-    ) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: Insufficient permissions" },
-        { status: 403 },
-      );
-    }
 
     const body = await request.json();
     const { id } = await params;
@@ -110,29 +87,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+    const session = auth.user;
 
     const supabase = createClient();
-
-    // Check permission
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (userError || !user || user.role !== "admin") {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: Only admins can delete" },
-        { status: 403 },
-      );
-    }
 
     const { id } = await params;
     const { error } = await supabase
