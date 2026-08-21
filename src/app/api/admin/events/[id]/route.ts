@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
-import { deleteFileFromSupabaseStorage } from '@/lib/storageUploadUtils';
+import { deleteFileFromAssetStorage } from '@/lib/storageUploadUtils';
 import { eventNotificationDetails, EventFormPayload, EventRecord, parseEventFormData, uploadEventImage } from '../eventUtils';
 
 export async function PUT(
@@ -30,8 +30,8 @@ export async function PUT(
       );
     }
 
-    const supabase = createClient();
-    const { data: existingEvent, error: lookupError } = await supabase
+    const lbcData = createClient();
+    const { data: existingEvent, error: lookupError } = await lbcData
       .from('events')
       .select('*')
       .eq('id', eventId)
@@ -62,7 +62,7 @@ export async function PUT(
       updates.image_key = imageUpload.value.imageKey;
     }
 
-    const { data: event, error } = await supabase
+    const { data: event, error } = await lbcData
       .from('events')
       .update(updates)
       .eq('id', eventId)
@@ -79,7 +79,7 @@ export async function PUT(
     }
 
     if (imageUpload.value.imageKey && existingEvent.image_key && existingEvent.image_key !== imageUpload.value.imageKey) {
-      await deleteFileFromSupabaseStorage(existingEvent.image_key);
+      await deleteFileFromAssetStorage(existingEvent.image_key);
     }
 
     try {
@@ -115,8 +115,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Invalid event id' }, { status: 400 });
     }
 
-    const supabase = createClient();
-    const { data: existingEvent, error: lookupError } = await supabase
+    const lbcData = createClient();
+    const { data: existingEvent, error: lookupError } = await lbcData
       .from('events')
       .select('*')
       .eq('id', eventId)
@@ -131,7 +131,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
     }
 
-    const { error } = await supabase
+    const { error } = await lbcData
       .from('events')
       .delete()
       .eq('id', eventId);
@@ -142,7 +142,7 @@ export async function DELETE(
     }
 
     if (existingEvent.image_key) {
-      await deleteFileFromSupabaseStorage(existingEvent.image_key);
+      await deleteFileFromAssetStorage(existingEvent.image_key);
     }
 
     try {

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { uploadBufferToAssetStorage } from '@/lib/storageUploadUtils';
 
 // GET - List all benefits
 export async function GET(request: NextRequest) {
@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
 
     // Check if user is admin and fetch benefits in parallel
     const [userResult, benefitsResult] = await Promise.all([
-      supabase
+      lbcData
         .from('users')
         .select('is_admin')
         .eq('id', session.id)
         .single(),
-      supabase
+      lbcData
         .from('benefits')
         .select('*')
         .order('created_at', { ascending: false })
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await lbcData
       .from('users')
       .select('is_admin')
       .eq('id', session.id)
@@ -95,19 +95,19 @@ export async function POST(request: NextRequest) {
       const fileName = `benefits/${uuidv4()}.${fileExtension}`;
       imageKey = fileName;
 
-      const uploadResult = await uploadBufferToSupabaseStorage(
+      const uploadResult = await uploadBufferToAssetStorage(
         fileName,
         Buffer.from(await imageFile.arrayBuffer()),
         imageFile.type
       );
 
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+        throw new Error(uploadResult.error || 'Asset storage upload failed');
       }
     }
 
     // Insert benefit into database
-    const { data: benefit, error } = await supabase
+    const { data: benefit, error } = await lbcData
       .from('benefits')
       .insert({
         title,

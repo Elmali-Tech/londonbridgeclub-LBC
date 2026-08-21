@@ -12,7 +12,7 @@ import { getAssetPublicUrl } from '@/lib/storage';
 import Cookies from 'js-cookie';
 
 interface UserProfileData {
-  id: number;
+  id: number | string;
   full_name: string;
   username?: string;
   headline?: string;
@@ -26,6 +26,11 @@ interface UserProfileData {
   website_url?: string;
   date_of_birth?: string;
   created_at: string;
+  membership_plan?: {
+    name?: string | null;
+    slug?: string | null;
+  } | null;
+  can_interact?: boolean;
   isFollowing: boolean;
   stats: {
     followers: number;
@@ -78,6 +83,8 @@ export default function UserProfilePage() {
     interests: []
   });
   const userId = params?.id as string;
+  const isLbcProfileRoute =
+    userId?.startsWith('lbc:') || userId?.startsWith('rec') || !Number.isFinite(Number(userId));
   
   // Check if viewing own profile
   const isCurrentUser = user ? String(user.id) === userId : false;
@@ -161,7 +168,7 @@ export default function UserProfilePage() {
   // Fetch user tags
   useEffect(() => {
     const fetchUserTags = async () => {
-      if (!userId) return;
+      if (!userId || isLbcProfileRoute) return;
       
       try {
         const token = localStorage.getItem('authToken') || Cookies.get('authToken');
@@ -192,11 +199,15 @@ export default function UserProfilePage() {
     };
 
     fetchUserTags();
-  }, [userId]);
+  }, [isLbcProfileRoute, userId]);
 
   // Handle follow user
   const handleFollow = async () => {
     if (!user) return;
+    if (profileData?.can_interact === false || typeof profileData?.id !== 'number') {
+      toast.error('This LBC profile is read-only for now.');
+      return;
+    }
     
     try {
       const token = localStorage.getItem('authToken') || Cookies.get('authToken');
@@ -240,6 +251,10 @@ export default function UserProfilePage() {
   // Handle unfollow user
   const handleUnfollow = async () => {
     if (!user) return;
+    if (profileData?.can_interact === false || typeof profileData?.id !== 'number') {
+      toast.error('This LBC profile is read-only for now.');
+      return;
+    }
     
     try {
       const token = localStorage.getItem('authToken') || Cookies.get('authToken');
@@ -285,7 +300,7 @@ export default function UserProfilePage() {
       return;
     }
 
-    if (!profileData.id) {
+    if (!profileData.id || profileData.can_interact === false || typeof profileData.id !== 'number') {
       toast.error('User profile data is incomplete');
       return;
     }
@@ -420,6 +435,26 @@ export default function UserProfilePage() {
     return fullName.split(' ').map(name => name[0]).join('').toUpperCase();
   };
 
+  const getPlanBadgeClasses = (slug?: string | null) => {
+    switch (slug) {
+      case 'diamond':
+        return 'bg-slate-950 text-white';
+      case 'emerald':
+        return 'bg-emerald-700 text-white';
+      case 'platinum':
+        return 'bg-gray-800 text-white';
+      case 'gold':
+        return 'bg-amber-500 text-white';
+      case 'silver':
+        return 'bg-gray-200 text-gray-800';
+      case 'bronze':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+  const canInteractWithProfile = profileData.can_interact !== false && typeof profileData.id === 'number';
+
   return (
     <DashboardContainer user={user} showLeftSidebar={true} showRightSidebar={true}>
       <div className="space-y-4 max-w-5xl mx-auto">
@@ -462,7 +497,11 @@ export default function UserProfilePage() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 pb-2">
-                {profileData.isFollowing ? (
+                {!canInteractWithProfile ? (
+                  <span className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 text-gray-500 rounded-full text-xs font-black uppercase tracking-widest border border-gray-200">
+                    LBC API Profile
+                  </span>
+                ) : profileData.isFollowing ? (
                   <button
                     onClick={handleUnfollow}
                     className="flex items-center gap-2 px-6 py-2.5 bg-gray-100 text-gray-700 rounded-full text-sm font-black uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95 border border-gray-200"
@@ -481,19 +520,32 @@ export default function UserProfilePage() {
                     Follow
                   </button>
                 )}
-                <button
-                  onClick={handleMessage}
-                  className="flex items-center gap-2 px-8 py-2.5 border-2 border-amber-500 text-amber-600 rounded-full text-sm font-black uppercase tracking-widest hover:bg-amber-50 transition-all active:scale-95"
-                >
-                  Message
-                </button>
+                {canInteractWithProfile && (
+                  <button
+                    onClick={handleMessage}
+                    className="flex items-center gap-2 px-8 py-2.5 border-2 border-amber-500 text-amber-600 rounded-full text-sm font-black uppercase tracking-widest hover:bg-amber-50 transition-all active:scale-95"
+                  >
+                    Message
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="md:col-span-2">
-                <h1 className="text-3xl font-black text-gray-900 mb-1">{profileData.full_name}</h1>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <h1 className="text-3xl font-black text-gray-900">{profileData.full_name}</h1>
+                  {profileData.membership_plan?.name && (
+                    <span
+                      className={`rounded-sm px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${getPlanBadgeClasses(
+                        profileData.membership_plan.slug,
+                      )}`}
+                    >
+                      {profileData.membership_plan.name}
+                    </span>
+                  )}
+                </div>
                 <p className="text-lg font-bold text-gray-600 mb-2 leading-tight">
                   {profileData.headline || "London Bridge Club Member"}
                 </p>
@@ -557,7 +609,7 @@ export default function UserProfilePage() {
                 <div className="space-y-6">
                   {userTags.job_title.length > 0 && (
                     <div>
-                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Roles & Positions</h3>
+                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Role / Service</h3>
                       <div className="flex flex-wrap gap-2">
                         {userTags.job_title.map((tag, i) => (
                           <span key={i} className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-black uppercase border border-blue-100">
@@ -570,7 +622,7 @@ export default function UserProfilePage() {
                   
                   {userTags.goals.length > 0 && (
                     <div>
-                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Core Objectives</h3>
+                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Looking For</h3>
                       <div className="flex flex-wrap gap-2">
                         {userTags.goals.map((tag, i) => (
                           <span key={i} className="px-4 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-black uppercase border border-green-100">
@@ -583,7 +635,7 @@ export default function UserProfilePage() {
 
                   {userTags.interests.length > 0 && (
                     <div>
-                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Areas of Interest</h3>
+                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Offering / Markets</h3>
                       <div className="flex flex-wrap gap-2">
                         {userTags.interests.map((tag, i) => (
                           <span key={i} className="px-4 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-black uppercase border border-purple-100">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function DELETE(
@@ -27,7 +27,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid token ID' }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const { error } = await lbcData
       .from('register_tokens')
       .delete()
       .eq('id', id);

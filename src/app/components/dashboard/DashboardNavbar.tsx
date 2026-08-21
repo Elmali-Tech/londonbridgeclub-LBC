@@ -97,7 +97,7 @@ export default function DashboardNavbar() {
     }
   };
 
-  const handleUserClick = (userId: number) => {
+  const handleUserClick = (userId: number | string) => {
     setShowSearchDropdown(false);
     setSearchQuery('');
     router.push(`/dashboard/users/${userId}`);

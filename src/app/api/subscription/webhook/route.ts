@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Stripe } from 'stripe';
 import { stripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { headers } from 'next/headers';
+import { callLbcEndpoint, LbcEndpoint } from '@/lib/lbc-api';
 
 interface ExtendedSubscription extends Stripe.Subscription {
   current_period_end: number;
@@ -10,6 +11,47 @@ interface ExtendedSubscription extends Stripe.Subscription {
 
 interface ExtendedInvoice extends Stripe.Invoice {
   subscription: string;
+}
+
+function subscriptionValueToString(value: string | Stripe.Subscription | null) {
+  if (!value) return '';
+  return typeof value === 'string' ? value : value.id;
+}
+
+async function syncLbcSubscriptionFromStripe(params: {
+  stripeSessionId: string;
+  lbcRecordId: string;
+  lbcMemberId?: string | null;
+  customerId: string;
+  subscriptionId: string;
+  planId: number | null;
+  tier?: string | null;
+  billingCycle: string;
+  status: string;
+  currentPeriodEnd: string;
+  entryFeePaid: number;
+}) {
+  const result = await callLbcEndpoint('/subscriptions' as LbcEndpoint, {
+    logicalMethod: 'POST',
+    payload: {
+      member_id: params.lbcRecordId,
+      lbc_member_id: params.lbcMemberId || null,
+      processor: 'stripe',
+      processor_customer_id: params.customerId,
+      processor_subscription_id: params.subscriptionId,
+      plan_id: params.planId,
+      tier: params.tier,
+      billing_cycle: params.billingCycle,
+      status: params.status,
+      current_period_end: params.currentPeriodEnd,
+      entry_fee_paid: params.entryFeePaid,
+    },
+    idempotencyKey: `stripe:${params.stripeSessionId}`,
+  });
+
+  if (!result.success) {
+    console.warn('LBC webhook subscription sync failed:', result.error || result.bodyError?.code);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -59,10 +101,10 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  const supabase = createClient();
+  const lbcData = createClient();
   const userId = session.client_reference_id;
   const customerId = session.customer as string;
-  const subscriptionId = session.subscription as string;
+  const subscriptionId = subscriptionValueToString(session.subscription);
 
   if (!userId) {
     console.error('Missing client_reference_id in checkout session');
@@ -71,7 +113,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
   if (!customerId || !subscriptionId) {
     if (customerId) {
-      await supabase.from('users').update({ stripe_customer_id: customerId }).eq('id', userId);
+      await lbcData.from('users').update({ stripe_customer_id: customerId }).eq('id', userId);
     }
     return;
   }
@@ -86,7 +128,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   }
 
   // Plan'ı price ID üzerinden bul
-  const { data: plan } = await supabase
+  const { data: plan } = await lbcData
     .from('membership_plans')
     .select('id, slug, category, stripe_monthly_price_id, stripe_yearly_price_id')
     .or(`stripe_monthly_price_id.eq.${priceId},stripe_yearly_price_id.eq.${priceId}`)
@@ -105,19 +147,40 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     ? new Date(currentPeriodEnd * 1000).toISOString()
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  await supabase
+  const lbcRecordId =
+    session.metadata?.lbcRecordId ||
+    (userId.startsWith('lbc:') ? userId.replace(/^lbc:/, '') : '');
+
+  if (session.metadata?.authProvider === 'lbc' || lbcRecordId) {
+    await syncLbcSubscriptionFromStripe({
+      stripeSessionId: session.id,
+      lbcRecordId,
+      lbcMemberId: session.metadata?.lbcMemberId || null,
+      customerId,
+      subscriptionId,
+      planId,
+      tier: session.metadata?.planSlug || plan?.slug || null,
+      billingCycle,
+      status: subscription.status,
+      currentPeriodEnd: endDate,
+      entryFeePaid,
+    });
+    return;
+  }
+
+  await lbcData
     .from('users')
     .update({ stripe_customer_id: customerId, subscription_status: subscription.status })
     .eq('id', userId);
 
-  const { data: existing } = await supabase
+  const { data: existing } = await lbcData
     .from('subscriptions')
     .select('id')
     .eq('user_id', userId)
     .single();
 
   if (existing) {
-    await supabase
+    await lbcData
       .from('subscriptions')
       .update({
         stripe_subscription_id: subscriptionId,
@@ -132,7 +195,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       })
       .eq('id', existing.id);
   } else {
-    await supabase.from('subscriptions').insert({
+    await lbcData.from('subscriptions').insert({
       user_id: userId,
       stripe_subscription_id: subscriptionId,
       stripe_customer_id: customerId,
@@ -147,8 +210,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 }
 
 async function handleSubscriptionUpdated(subscription: ExtendedSubscription) {
-  const supabase = createClient();
-  const { data: subData } = await supabase
+  const lbcData = createClient();
+  const { data: subData } = await lbcData
     .from('subscriptions')
     .select('user_id')
     .eq('stripe_subscription_id', subscription.id)
@@ -160,18 +223,18 @@ async function handleSubscriptionUpdated(subscription: ExtendedSubscription) {
     ? new Date(subscription.current_period_end * 1000).toISOString()
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  await supabase.from('users')
+  await lbcData.from('users')
     .update({ subscription_status: subscription.status })
     .eq('id', subData.user_id);
 
-  await supabase.from('subscriptions')
+  await lbcData.from('subscriptions')
     .update({ status: subscription.status, current_period_end: endDate, updated_at: new Date().toISOString() })
     .eq('stripe_subscription_id', subscription.id);
 }
 
 async function handleSubscriptionDeleted(subscription: ExtendedSubscription) {
-  const supabase = createClient();
-  const { data: subData } = await supabase
+  const lbcData = createClient();
+  const { data: subData } = await lbcData
     .from('subscriptions')
     .select('user_id')
     .eq('stripe_subscription_id', subscription.id)
@@ -179,20 +242,20 @@ async function handleSubscriptionDeleted(subscription: ExtendedSubscription) {
 
   if (!subData) return;
 
-  await supabase.from('users')
+  await lbcData.from('users')
     .update({ subscription_status: 'canceled' })
     .eq('id', subData.user_id);
 
-  await supabase.from('subscriptions')
+  await lbcData.from('subscriptions')
     .update({ status: 'canceled', updated_at: new Date().toISOString() })
     .eq('stripe_subscription_id', subscription.id);
 }
 
 async function handleInvoicePaymentFailed(invoice: ExtendedInvoice) {
-  const supabase = createClient();
+  const lbcData = createClient();
   if (!invoice.subscription) return;
 
-  const { data: subData } = await supabase
+  const { data: subData } = await lbcData
     .from('subscriptions')
     .select('user_id')
     .eq('stripe_subscription_id', invoice.subscription)
@@ -200,17 +263,17 @@ async function handleInvoicePaymentFailed(invoice: ExtendedInvoice) {
 
   if (!subData) return;
 
-  await supabase.from('users').update({ subscription_status: 'past_due' }).eq('id', subData.user_id);
-  await supabase.from('subscriptions')
+  await lbcData.from('users').update({ subscription_status: 'past_due' }).eq('id', subData.user_id);
+  await lbcData.from('subscriptions')
     .update({ status: 'past_due', updated_at: new Date().toISOString() })
     .eq('stripe_subscription_id', invoice.subscription);
 }
 
 async function handleInvoicePaid(invoice: ExtendedInvoice) {
-  const supabase = createClient();
+  const lbcData = createClient();
   if (!invoice.subscription) return;
 
-  const { data: subData } = await supabase
+  const { data: subData } = await lbcData
     .from('subscriptions')
     .select('user_id')
     .eq('stripe_subscription_id', invoice.subscription)
@@ -218,7 +281,7 @@ async function handleInvoicePaid(invoice: ExtendedInvoice) {
 
   if (!subData) return;
 
-  await supabase.from('users').update({ subscription_status: 'active' }).eq('id', subData.user_id);
+  await lbcData.from('users').update({ subscription_status: 'active' }).eq('id', subData.user_id);
 
   const subscriptionResponse = await stripe.subscriptions.retrieve(invoice.subscription as string);
   const sub = subscriptionResponse as unknown as ExtendedSubscription;
@@ -226,7 +289,7 @@ async function handleInvoicePaid(invoice: ExtendedInvoice) {
     ? new Date(sub.current_period_end * 1000).toISOString()
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  await supabase.from('subscriptions')
+  await lbcData.from('subscriptions')
     .update({ status: 'active', current_period_end: endDate, updated_at: new Date().toISOString() })
     .eq('stripe_subscription_id', invoice.subscription);
 }

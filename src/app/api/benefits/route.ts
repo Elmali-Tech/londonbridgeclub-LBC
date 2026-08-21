@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
 
 interface Benefit {
@@ -30,11 +30,11 @@ export async function GET(request: Request) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Fetch active benefits
-    const { data: benefits, error } = await supabase
+    const { data: benefits, error } = await lbcData
       .from('benefits')
       .select('*')
       .eq('is_active', true)

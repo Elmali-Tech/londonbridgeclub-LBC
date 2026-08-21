@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
 import ImageEditModal from '@/app/components/profile/ImageEditModal';
 import { toast } from 'react-hot-toast';
 import { HiPencil } from 'react-icons/hi';
 import { getAssetPublicUrl } from '@/lib/storage';
+import Cookies from 'js-cookie';
 
 // Define user data interface
 interface UserProfileData {
@@ -37,26 +37,10 @@ export default function ProfileTab() {
 
   // Fetch user profile data
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user) return;
-      
-      try {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (userError) throw userError;
-        
-        setProfileData(userData as UserProfileData);
-        setFormData(userData as UserProfileData);
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-      }
-    };
-    
-    fetchUserData();
+    if (!user) return;
+
+    setProfileData(user as UserProfileData);
+    setFormData(user as UserProfileData);
   }, [user]);
 
   // Handle form input changes
@@ -68,24 +52,44 @@ export default function ProfileTab() {
     }));
   };
 
+  const submitProfileUpdate = async (nextFields: Partial<UserProfileData>) => {
+    const token = Cookies.get('authToken') || localStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('Your session has expired. Please log in again.');
+    }
+
+    const payload = new FormData();
+    Object.entries(nextFields).forEach(([field, value]) => {
+      payload.append(field, typeof value === 'string' ? value : value == null ? '' : String(value));
+    });
+
+    const response = await fetch('/api/profile/update', {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: payload,
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to update profile information');
+    }
+
+    setProfileData(result.user as UserProfileData);
+    setFormData(result.user as UserProfileData);
+    updateUserData(result.user);
+
+    return result.user as UserProfileData;
+  };
+
   // Handle profile image upload
   const handleProfileImageUploaded = async (key: string) => {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
-      setProfileData(prev => prev ? { ...prev, profile_image_key: key } : null);
-      setFormData(prev => ({
-        ...prev,
-        profile_image_key: key
-      }));
-      
+      await submitProfileUpdate({ profile_image_key: key });
       toast.success('Profile photo updated successfully');
     } catch (error) {
       console.error('Failed to update profile image:', error);
@@ -98,19 +102,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
-      setProfileData(prev => prev ? { ...prev, profile_image_key: undefined } : null);
-      setFormData(prev => ({
-        ...prev,
-        profile_image_key: undefined
-      }));
-      
+      await submitProfileUpdate({ profile_image_key: '' });
       toast.success('Profile photo removed successfully');
     } catch (error) {
       console.error('Failed to remove profile image:', error);
@@ -123,19 +115,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
-      setProfileData(prev => prev ? { ...prev, banner_image_key: key } : null);
-      setFormData(prev => ({
-        ...prev,
-        banner_image_key: key
-      }));
-      
+      await submitProfileUpdate({ banner_image_key: key });
       toast.success('Cover photo updated successfully');
     } catch (error) {
       console.error('Failed to update banner image:', error);
@@ -148,19 +128,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
-      setProfileData(prev => prev ? { ...prev, banner_image_key: undefined } : null);
-      setFormData(prev => ({
-        ...prev,
-        banner_image_key: undefined
-      }));
-      
+      await submitProfileUpdate({ banner_image_key: '' });
       toast.success('Cover photo removed successfully');
     } catch (error) {
       console.error('Failed to remove banner image:', error);
@@ -174,13 +142,6 @@ export default function ProfileTab() {
     
     setSaving(true);
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        toast.error('Your session has expired. Please log in again.');
-        return;
-      }
-
-      const payload = new FormData();
       const editableFields: Array<keyof UserProfileData> = [
         'email',
         'full_name',
@@ -193,30 +154,14 @@ export default function ProfileTab() {
         'website_url',
         'date_of_birth',
       ];
+      const profilePatch: Partial<UserProfileData> = {};
 
       editableFields.forEach((field) => {
         const value = formData[field];
-        payload.append(field, typeof value === 'string' ? value : '');
+        (profilePatch as Record<string, string>)[field] = typeof value === 'string' ? value : '';
       });
 
-      const response = await fetch('/api/profile/update', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: payload,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to update profile information');
-      }
-      
-      setProfileData(result.user as UserProfileData);
-      setFormData(result.user as UserProfileData);
-      updateUserData(result.user);
-      
+      await submitProfileUpdate(profilePatch);
       toast.success('Profile information updated successfully');
     } catch (error: any) {
       console.error('Failed to update profile:', error);

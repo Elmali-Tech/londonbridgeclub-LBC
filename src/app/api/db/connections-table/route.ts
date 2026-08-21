@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET() {
   try {
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Create connections table if it doesn't exist
-    const { error } = await supabase.rpc('create_connections_table');
+    const { error } = await lbcData.rpc('create_connections_table');
 
     if (error) {
       console.error('Error creating connections table:', error);

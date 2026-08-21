@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { AuthProvider } from "../context/AuthContext";
 import { Toaster } from "react-hot-toast";
 import RealtimeInitializer from "../components/RealtimeInitializer";
@@ -93,6 +94,14 @@ export default function RootLayout({
             }}
           />
         </AuthProvider>
+        <Script
+          src="https://ali-chatbot-api.vercel.app/chatbot-widget.js?v=17.1"
+          strategy="afterInteractive"
+          data-tenant="lbc"
+          data-tenant-name="London Bridge Club"
+          data-brand-color="#0F172A"
+          data-greeting="Merhaba, ben London Bridge Club asistanı Ali. Size nasıl yardımcı olabilirim?"
+        />
       </body>
     </html>
   );

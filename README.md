@@ -1,74 +1,45 @@
-# London Bridge Club
+# London Bridge Club Web
 
-Bu proje, London Bridge Club için web uygulamasını içerir. Next.js, Tailwind CSS ve Supabase veritabanı kullanılarak geliştirilmiştir.
+Next.js application backed by the LBC API. Application data is accessed through
+the n8n LBC API gateway; assets are stored in AWS S3 and payments use Stripe.
 
-## Kurulum
+## Local setup
 
-1. Proje dosyalarını indirin:
-```bash
-git clone <repo-url>
-cd londonbridge
-```
-
-2. Bağımlılıkları yükleyin:
 ```bash
 npm install
-```
-
-3. Supabase projesi oluşturun:
-   - [Supabase](https://supabase.com/) sitesine gidip hesap oluşturun
-   - Yeni bir proje oluşturun
-   - SQL Editor bölümünden `schema.sql` dosyasındaki komutları çalıştırın
-   - Proje ayarlarından API URL ve anonim API anahtarını kopyalayın
-
-4. `.env.local` dosyasını güncelleyin:
-```
-NEXT_PUBLIC_SUPABASE_URL=sizin-supabase-url-adresiniz
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sizin-supabase-anonim-anahtarınız
-```
-
-5. Uygulamayı çalıştırın:
-```bash
 npm run dev
 ```
 
-## Özellikler
+Required environment variables:
 
-- Responsive tasarım
-- Özel kimlik doğrulama sistemi
-- Kullanıcı kaydı ve girişi
-- Anasayfa
-- Üyelik planları
+```dotenv
+LBC_API_TOKEN=
+LBC_API_WEBHOOK_URL=
+LBC_AUTH_SESSION_SECRET=
+LBC_AUTH_LOGIN_PATH=/auth/login
+LBC_AUTH_REGISTER_PATH=/members
+LBC_AUTH_REQUEST_PASSWORD_RESET_PATH=/auth/request-password-reset
+LBC_AUTH_RESET_PASSWORD_PATH=/auth/reset-password
+LBC_AUTH_CHANGE_PASSWORD_PATH=/auth/change-password
+LBC_ADMIN_EMAILS=
 
-## Teknolojiler
+NEXT_PUBLIC_AWS_REGION=
+NEXT_PUBLIC_AWS_S3_BUCKET_NAME=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 
-- Next.js 15
-- React
-- TypeScript
-- Tailwind CSS
-- Supabase
+STRIPE_SECRET_KEY=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
+```
 
-## Proje Yapısı
+## Verification
 
-- `/src/app`: Sayfa bileşenleri (Page Router)
-- `/src/components`: Ortak bileşenler
-- `/src/lib`: Yardımcı fonksiyonlar ve servisler
-- `/src/context`: React context tanımları
-- `/src/types`: TypeScript tip tanımları
+```bash
+npx tsc --noEmit
+npm run build
+npm run check:lbc-api
+```
 
-## Veritabanı Şeması
-
-### users
-- id: SERIAL PRIMARY KEY
-- email: VARCHAR(255) UNIQUE NOT NULL
-- password_hash: VARCHAR(255) NOT NULL
-- full_name: VARCHAR(255) NOT NULL
-- created_at: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-- updated_at: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-
-### sessions
-- id: SERIAL PRIMARY KEY
-- user_id: INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- token: VARCHAR(255) UNIQUE NOT NULL
-- expires_at: TIMESTAMP WITH TIME ZONE NOT NULL
-- created_at: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+See [LBC_API_GAP_REPORT.md](./LBC_API_GAP_REPORT.md) for endpoints and fields
+that the backend still needs to implement before a production release.

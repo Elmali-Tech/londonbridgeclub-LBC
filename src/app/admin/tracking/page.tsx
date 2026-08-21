@@ -3,8 +3,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { CustomerOpportunity } from "@/types/database";
+import { formatGBPAmount, getOpportunityValueInGBP } from "@/lib/currency";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAssetPublicUrl } from "@/lib/storage";
 import {
@@ -71,7 +72,7 @@ export default function TrackingPage() {
 
   const fetchPartners = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from('partners')
         .select('name, logo_key');
       if (error) throw error;
@@ -387,8 +388,13 @@ export default function TrackingPage() {
                             : normalizeStageLabel(opp.deal_stage)}
                         </span>
                       </td>
-                      <td className="px-8 py-6 font-black text-amber-500 tracking-tighter">
-                        {opp.estimated_deal_size || "—"}
+                      <td className="px-8 py-6">
+                        <div className="font-black text-amber-500 tracking-tighter">
+                          {opp.estimated_deal_size || "—"}
+                        </div>
+                        <div className="mt-1 text-xs font-black text-gray-500 dark:text-gray-400">
+                          {formatGBPAmount(getOpportunityValueInGBP(opp))}
+                        </div>
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 dark:text-gray-400">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // GET - Kullanıcının tüm sohbetlerini getir (OPTIMIZED)
 export async function GET(request: NextRequest) {
@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // OPTIMIZED: Single query with all necessary joins to avoid N+1 problem
-    const { data: chatsData, error } = await supabase.rpc('get_user_chats_optimized', {
+    const { data: chatsData, error } = await lbcData.rpc('get_user_chats_optimized', {
       target_user_id: user.id
     });
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching chats:', error);
       
       // Fallback to original query if RPC fails
-      return await getFallbackChats(supabase, user.id);
+      return await getFallbackChats(lbcData, user.id);
     }
 
     // Process the optimized data
@@ -122,10 +122,10 @@ export async function GET(request: NextRequest) {
 }
 
 // Fallback function for when RPC is not available
-async function getFallbackChats(supabase: any, userId: number) {
+async function getFallbackChats(lbcData: any, userId: number) {
   try {
     // Kullanıcının katıldığı tüm aktif sohbetleri getir
-    const { data: chats, error } = await supabase
+    const { data: chats, error } = await lbcData
       .from('chats')
       .select(`
         *,
@@ -149,7 +149,7 @@ async function getFallbackChats(supabase: any, userId: number) {
     const chatIds = chats.map((chat: any) => chat.id);
     
     // Get all participants for all chats at once
-    const { data: allParticipants } = await supabase
+    const { data: allParticipants } = await lbcData
       .from('chat_participants')
       .select(`
         *,
@@ -159,7 +159,7 @@ async function getFallbackChats(supabase: any, userId: number) {
       .eq('is_active', true);
 
     // Get all unread counts at once using a single query
-    const { data: unreadCounts } = await supabase
+    const { data: unreadCounts } = await lbcData
       .from('messages')
       .select('chat_id')
       .in('chat_id', chatIds)
@@ -247,14 +247,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Direct chat için mevcut sohbeti kontrol et - OPTIMIZED with RPC
     if (type === 'direct' && participant_ids.length === 1) {
       const otherUserId = participant_ids[0];
       
       // Use optimized RPC function
-      const { data: existingChatId } = await supabase.rpc('get_or_create_direct_chat', {
+      const { data: existingChatId } = await lbcData.rpc('get_or_create_direct_chat', {
         user1_id: user.id,
         user2_id: otherUserId
       });
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
       if (existingChatId) {
         // Eğer başlangıç mesajı varsa gönder
         if (initial_message) {
-          await supabase
+          await lbcData
             .from('messages')
             .insert({
               chat_id: existingChatId,
@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Yeni sohbet oluştur (grup veya mevcut direct chat yoksa)
-    const { data: chat, error: chatError } = await supabase
+    const { data: chat, error: chatError } = await lbcData
       .from('chats')
       .insert({
         type,
@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
       role: userId === user.id ? 'admin' : 'member'
     }));
 
-    const { error: participantError } = await supabase
+    const { error: participantError } = await lbcData
       .from('chat_participants')
       .insert(participantInserts);
 
@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
 
     // Başlangıç mesajı varsa ekle
     if (initial_message) {
-      const { error: messageError } = await supabase
+      const { error: messageError } = await lbcData
         .from('messages')
         .insert({
           chat_id: chat.id,

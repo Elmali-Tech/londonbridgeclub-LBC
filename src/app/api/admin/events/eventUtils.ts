@@ -1,4 +1,4 @@
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { uploadBufferToAssetStorage } from '@/lib/storageUploadUtils';
 
 export interface EventRecord {
   id: number;
@@ -113,7 +113,7 @@ export const uploadEventImage = async (
   const extension = imageFile.name.split('.').pop()?.toLowerCase() || fallbackExtension;
   const fileName = `events/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${extension}`;
 
-  const uploadResult = await uploadBufferToSupabaseStorage(
+  const uploadResult = await uploadBufferToAssetStorage(
     fileName,
     Buffer.from(await imageFile.arrayBuffer()),
     imageFile.type

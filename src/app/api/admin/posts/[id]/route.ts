@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function DELETE(
   request: NextRequest,
@@ -26,10 +26,10 @@ export async function DELETE(
       );
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // First verify that this is an admin post
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .select('is_admin_post')
       .eq('id', postId)
@@ -50,7 +50,7 @@ export async function DELETE(
     }
 
     // Delete the post
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await lbcData
       .from('posts')
       .delete()
       .eq('id', postId);

@@ -1,19 +1,18 @@
 import { User } from '@/types/database';
-import { supabase } from './supabase';
+import { lbcData } from './lbc-data';
 
 export type SubscriptionStatus = 'active' | 'inactive' | 'loading';
 
 /**
- * Kullanıcının abonelik durumunu Supabase'den alır
- * @param userId Kullanıcı ID'si
- * @returns Abonelik durumu: 'active', 'inactive' veya hata durumunda 'inactive'
+ * Kullanıcının abonelik durumunu LBC API'den alır.
+ * LBC auth kullanıcılarında session içindeki active_subscription türevi status kullanılır.
  */
 export const fetchSubscriptionStatus = async (userId: number): Promise<SubscriptionStatus> => {
   if (!userId) return 'inactive';
   
   try {
     // Kullanıcının mevcut durumunu veritabanından al
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('users')
       .select('subscription_status')
       .eq('id', userId)
@@ -30,7 +29,7 @@ export const fetchSubscriptionStatus = async (userId: number): Promise<Subscript
 };
 
 /**
- * Kullanıcının abonelik detaylarını Supabase'den alır
+ * Kullanıcının abonelik detaylarını LBC API'den alır.
  * @param userId Kullanıcı ID'si
  * @returns Abonelik detayları veya null
  */
@@ -38,7 +37,7 @@ export const fetchSubscriptionDetails = async (userId: number) => {
   if (!userId) return null;
   
   try {
-    const { data, error } = await supabase
+    const { data, error } = await lbcData
       .from('subscriptions')
       .select('*')
       .eq('user_id', userId)
@@ -77,6 +76,11 @@ export const updateSubscriptionStatus = async (
     setSubscriptionStatus('inactive');
     return;
   }
+
+  if (user.auth_provider === 'lbc') {
+    setSubscriptionStatus(user.subscription_status === 'active' ? 'active' : 'inactive');
+    return;
+  }
   
   try {
     const status = await fetchSubscriptionStatus(user.id);
@@ -96,7 +100,7 @@ export const hasAnySubscription = async (userId: number): Promise<boolean> => {
   if (!userId) return false;
 
   try {
-    const { count, error } = await supabase
+    const { count, error } = await lbcData
       .from('subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId);
@@ -111,4 +115,4 @@ export const hasAnySubscription = async (userId: number): Promise<boolean> => {
     console.error('Failed to check subscription existence:', error);
     return false;
   }
-}; 
+};

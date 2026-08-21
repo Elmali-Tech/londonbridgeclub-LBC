@@ -1,148 +1,89 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
-import { AllowedFileTypes, FileSizeLimits, S3Folders } from './awsConfig';
-import { getSupabaseStoragePublicUrl, storageBucketName } from './storage';
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { v4 as uuidv4 } from "uuid";
+import { AllowedFileTypes, FileSizeLimits, S3Folders, s3Client, bucketName } from "./awsConfig";
+import { getAssetPublicUrl } from "./storage";
 
 export type StorageFileType =
-  | 'PROFILE_IMAGE'
-  | 'BANNER_IMAGE'
-  | 'POST_MEDIA'
-  | 'PARTNERS_LOGOS'
-  | 'BENEFITS_IMAGES';
-
-interface FileValidationResult {
-  isValid: boolean;
-  error?: string;
-}
+  | "PROFILE_IMAGE"
+  | "BANNER_IMAGE"
+  | "POST_MEDIA"
+  | "PARTNERS_LOGOS"
+  | "BENEFITS_IMAGES";
 
 const folderByFileType: Record<StorageFileType, string> = {
   PROFILE_IMAGE: S3Folders.PROFILE_IMAGES,
   BANNER_IMAGE: S3Folders.BANNER_IMAGES,
   POST_MEDIA: S3Folders.POST_MEDIA,
   PARTNERS_LOGOS: S3Folders.PARTNERS_LOGOS,
-  BENEFITS_IMAGES: 'benefits',
+  BENEFITS_IMAGES: "benefits",
 };
 
-const getStorageClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase storage environment variables');
-  }
-
-  return createSupabaseClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-};
-
-export const validateStorageFile = (
-  file: File,
-  type: StorageFileType
-): FileValidationResult => {
+export const validateStorageFile = (file: File, type: StorageFileType) => {
   if (!AllowedFileTypes[type].includes(file.type)) {
     return {
       isValid: false,
-      error: `Unsupported file type. Allowed types: ${AllowedFileTypes[type].join(', ')}`,
+      error: `Unsupported file type. Allowed types: ${AllowedFileTypes[type].join(", ")}`,
     };
   }
-
   if (file.size > FileSizeLimits[type]) {
-    const limitInMB = FileSizeLimits[type] / (1024 * 1024);
     return {
       isValid: false,
-      error: `File too large. Maximum file size: ${limitInMB}MB`,
+      error: `File too large. Maximum file size: ${FileSizeLimits[type] / 1024 / 1024}MB`,
     };
   }
-
   return { isValid: true };
 };
 
 export const generateStorageKey = (
   folder: string,
   userId: string,
-  fileName: string
-): string => {
-  const fileExtension = fileName.split('.').pop() || 'bin';
-  return `${folder}/${userId}/${uuidv4()}.${fileExtension}`;
-};
+  fileName: string,
+) => `${folder}/${userId}/${uuidv4()}.${fileName.split(".").pop() || "bin"}`;
 
-export const uploadBufferToSupabaseStorage = async (
+export const uploadBufferToAssetStorage = async (
   key: string,
   body: Buffer,
-  contentType?: string
+  contentType?: string,
 ): Promise<{ success: boolean; key?: string; publicUrl?: string; error?: string }> => {
   try {
-    if (!key) {
-      return { success: false, error: 'Storage key is required' };
-    }
-
-    const supabase = getStorageClient();
-    const { error } = await supabase.storage
-      .from(storageBucketName)
-      .upload(key, body, {
-        contentType,
-        upsert: true,
-      });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return {
-      success: true,
-      key,
-      publicUrl: getSupabaseStoragePublicUrl(key),
-    };
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+    return { success: true, key, publicUrl: getAssetPublicUrl(key) };
   } catch (error) {
-    console.error('Error uploading file to Supabase Storage:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred during upload',
+      error: error instanceof Error ? error.message : "Asset upload failed",
     };
   }
 };
 
-export const uploadFileToSupabaseStorage = async (
+export const uploadFileToAssetStorage = async (
   file: File,
   userId: string,
-  fileType: StorageFileType
-): Promise<{ success: boolean; key?: string; publicUrl?: string; error?: string }> => {
+  fileType: StorageFileType,
+) => {
   const validation = validateStorageFile(file, fileType);
-  if (!validation.isValid) {
-    return { success: false, error: validation.error };
-  }
-
+  if (!validation.isValid) return { success: false, error: validation.error };
   const key = generateStorageKey(folderByFileType[fileType], userId, file.name);
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-  return uploadBufferToSupabaseStorage(key, fileBuffer, file.type);
+  return uploadBufferToAssetStorage(
+    key,
+    Buffer.from(await file.arrayBuffer()),
+    file.type,
+  );
 };
 
-export const deleteFileFromSupabaseStorage = async (
-  key: string
-): Promise<boolean> => {
+export const deleteFileFromAssetStorage = async (key: string) => {
+  if (!key) return true;
   try {
-    if (!key) return true;
-
-    const supabase = getStorageClient();
-    const { error } = await supabase.storage
-      .from(storageBucketName)
-      .remove([key]);
-
-    if (error) {
-      console.error('Error deleting file from Supabase Storage:', error);
-      return false;
-    }
-
+    await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
     return true;
-  } catch (error) {
-    console.error('Unexpected error deleting from Supabase Storage:', error);
+  } catch {
     return false;
   }
 };

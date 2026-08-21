@@ -1,8 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { stripe } from '@/lib/stripe';
 import { validateToken } from '@/lib/auth';
+
+type LbcProcessorSubscription = {
+  status?: string | null;
+  tier?: string | null;
+  plan?: string | null;
+  processor_customer_id?: string | null;
+  processor_subscription_id?: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getLbcActiveSubscription(user: Awaited<ReturnType<typeof validateToken>>) {
+  if (!user || !isRecord(user.lbc_member_payload)) return null;
+
+  const activeSubscription = user.lbc_member_payload.active_subscription;
+  return isRecord(activeSubscription)
+    ? (activeSubscription as LbcProcessorSubscription)
+    : null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,32 +57,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const supabase = createClient();
-    let stripeCustomerId: string | undefined;
+    const lbcData = createClient();
+    const lbcActiveSubscription = getLbcActiveSubscription(authUser);
 
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, is_approved, role, stripe_customer_id')
-      .eq('id', userId)
-      .single();
-
-    if (userError || !userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    if (!userData.is_approved && userData.role !== 'admin') {
+    if (!authUser.is_approved && authUser.role !== 'admin') {
       return NextResponse.json(
         { error: 'Your application is pending approval. Payment will be available after admin approval.' },
         { status: 403 }
       );
     }
 
-    if (userData.stripe_customer_id) {
-      stripeCustomerId = userData.stripe_customer_id;
-    }
+    const stripeCustomerId =
+      authUser.stripe_customer_id ||
+      lbcActiveSubscription?.processor_customer_id ||
+      undefined;
 
     // Planı DB'den al
-    const { data: plan, error: planError } = await supabase
+    const { data: plan, error: planError } = await lbcData
       .from('membership_plans')
       .select('id, name, slug, stripe_monthly_price_id, stripe_yearly_price_id, entry_fee_early, entry_fee_standard')
       .eq('id', planId)
@@ -98,7 +110,7 @@ export async function POST(req: NextRequest) {
 
     // ─── Mevcut abonelik kontrolü ───────────────────────────────────
     if (userId) {
-      const { data: existingSub } = await supabase
+      const { data: existingSub } = await lbcData
         .from('subscriptions')
         .select('id, stripe_subscription_id, stripe_customer_id, plan_id')
         .eq('user_id', userId)
@@ -139,7 +151,7 @@ export async function POST(req: NextRequest) {
             ? new Date(currentPeriodEnd * 1000).toISOString()
             : null;
 
-          await supabase
+          await lbcData
             .from('subscriptions')
             .update({
               plan_id: plan.id,
@@ -169,14 +181,14 @@ export async function POST(req: NextRequest) {
     // ─── Yeni abonelik (ilk defa) → Checkout Session ───────────────
     // Giriş bedeli hesapla
     let entryFeeAmount = 0;
-    const { data: entrySettings } = await supabase
+    const { data: entrySettings } = await lbcData
       .from('entry_fee_settings')
       .select('is_active, threshold')
       .eq('id', 1)
       .single();
 
     if (entrySettings?.is_active) {
-      const { count } = await supabase
+      const { count } = await lbcData
         .from('subscriptions')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'active');
@@ -211,10 +223,17 @@ export async function POST(req: NextRequest) {
       mode: 'subscription',
       success_url: `${baseUrl}/membership/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/membership`,
-      client_reference_id: userId ? String(userId) : undefined,
+      client_reference_id: authUser.lbc_record_id
+        ? `lbc:${authUser.lbc_record_id}`
+        : userId
+          ? String(userId)
+          : undefined,
       ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
       metadata: {
+        authProvider: 'lbc',
         userId: userId ? String(userId) : '',
+        lbcRecordId: authUser.lbc_record_id || '',
+        lbcMemberId: authUser.lbc_member_id || '',
         planId: String(plan.id),
         planSlug: plan.slug,
         billingCycle,

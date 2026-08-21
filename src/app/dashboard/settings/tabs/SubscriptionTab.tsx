@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { toast } from 'react-hot-toast';
 import type { Subscription, MembershipPlan } from '@/types/database';
 
@@ -32,8 +32,8 @@ export default function SubscriptionTab() {
     if (!user) return;
     async function fetchSubscription() {
       try {
-        const supabase = createClient();
-        const { data } = await supabase
+        const lbcData = createClient();
+        const { data } = await lbcData
           .from('subscriptions')
           .select('*, membership_plans(*)')
           .eq('user_id', user!.id)

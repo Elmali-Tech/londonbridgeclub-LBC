@@ -6,7 +6,7 @@ import Cookies from "js-cookie";
 import { toast } from "react-hot-toast";
 import { getS3PublicUrl } from "@/lib/awsConfig";
 import RichTextTokens from "@/app/components/RichTextTokens";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { extractTextTokens } from "@/lib/textTokens";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiTarget } from "react-icons/fi";
 
@@ -116,7 +116,7 @@ export default function AdminOpportunitiesPage() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from("users")
         .select("id, full_name, profile_image_key")
         .order("full_name", { ascending: true });

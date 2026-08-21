@@ -50,7 +50,8 @@ function PartnerLogo({ partner, variant }: { partner: PublicPartner; variant: 'm
         alt={partner.name}
         width={192}
         height={56}
-        className="h-14 w-44 object-contain opacity-90 transition duration-300 hover:opacity-100"
+        className="max-h-14 w-auto max-w-44 object-contain opacity-90 transition duration-300 hover:opacity-100"
+        style={{ height: 'auto' }}
         onError={() => {
           setImageSrc('');
         }}

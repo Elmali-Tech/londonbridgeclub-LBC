@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
     const targetUserId = searchParams.get('user_id');
     const userId = targetUserId ? parseInt(targetUserId) : user.id;
 
-    const supabase = createClient();
+    const lbcData = createClient();
     
     // Get user tags
-    const { data: tags, error } = await supabase
+    const { data: tags, error } = await lbcData
       .from('user_tags')
       .select('*')
       .eq('user_id', userId)
@@ -82,10 +82,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tag value cannot be empty' }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
     
     // Check if tag already exists
-    const { data: existingTag } = await supabase
+    const { data: existingTag } = await lbcData
       .from('user_tags')
       .select('id')
       .eq('user_id', userId)
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert new tag
-    const { data: newTag, error } = await supabase
+    const { data: newTag, error } = await lbcData
       .from('user_tags')
       .insert({
         user_id: userId,
@@ -143,12 +143,12 @@ export async function DELETE(request: NextRequest) {
     const tagType = searchParams.get('tag_type');
     const tagValue = searchParams.get('tag_value');
 
-    const supabase = createClient();
+    const lbcData = createClient();
     
     // Delete tag by ID or by type+value
     if (tagId) {
       // Delete by ID
-      const { error } = await supabase
+      const { error } = await lbcData
         .from('user_tags')
         .delete()
         .eq('id', tagId)
@@ -160,7 +160,7 @@ export async function DELETE(request: NextRequest) {
       }
     } else if (tagType && tagValue) {
       // Delete by type and value
-      const { error } = await supabase
+      const { error } = await lbcData
         .from('user_tags')
         .delete()
         .eq('user_id', userId)

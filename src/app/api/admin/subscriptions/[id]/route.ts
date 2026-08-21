@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
 import { stripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,9 +14,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await req.json();
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { data, error } = await supabase
+  const { data, error } = await lbcData
     .from('subscriptions')
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -35,9 +35,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { data: sub, error: fetchErr } = await supabase
+  const { data: sub, error: fetchErr } = await lbcData
     .from('subscriptions')
     .select('stripe_subscription_id, user_id')
     .eq('id', id)
@@ -56,12 +56,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
   }
 
-  await supabase
+  await lbcData
     .from('subscriptions')
     .update({ status: 'canceled', updated_at: new Date().toISOString() })
     .eq('id', id);
 
-  await supabase
+  await lbcData
     .from('users')
     .update({ subscription_status: 'canceled' })
     .eq('id', sub.user_id);

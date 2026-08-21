@@ -29,6 +29,16 @@ export interface User {
   is_admin: boolean;
   role: UserRole;
   can_create_opportunities?: boolean;
+  lbc_record_id?: string | null;
+  lbc_member_id?: string | null;
+  lbc_member_type?: string | null;
+  lbc_tier?: string | null;
+  lbc_sector?: string | null;
+  lbc_is_anchor?: boolean | null;
+  lbc_member_payload?: Record<string, unknown> | null;
+  lbc_synced_at?: string | null;
+  auth_provider?: string | null;
+  password_needs_reset?: boolean | null;
 }
 
 // ── Membership Plan Types ────────────────────────────────────────
@@ -36,6 +46,12 @@ export interface User {
 export type PlanCategory = 'individual' | 'corporate';
 export type BillingCycle = 'monthly' | 'yearly';
 export type PlanSlug = 'bronze' | 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond';
+export type DealValuationPeriod =
+  | "one_time"
+  | "monthly"
+  | "quarterly"
+  | "six_months"
+  | "annual";
 
 export interface PlanFeature {
   id: number;
@@ -106,15 +122,23 @@ export interface Subscription {
 
 export interface CustomerOpportunity {
   id: number;
+  customer_id?: number | null;
+  partner_id?: number | null;
+  record_type?: "lead" | "opportunity";
   customer_name: string;
   company_name: string;
   contact_person?: string;
   opportunity_title: string;
   opportunity_description?: string;
   estimated_deal_size?: string;
+  estimated_deal_value?: number | null;
+  deal_valuation_period?: DealValuationPeriod;
+  currency_code?: string | null;
   referral_source?: string;
   commission_rate?: string;
+  commission_rate_percent?: number | null;
   lbc_commission?: string;
+  lbc_commission_amount?: number | null;
   deal_stage?: string;
   responsible_person?: string;
   expected_closing_date?: string;
@@ -126,6 +150,8 @@ export interface CustomerOpportunity {
     full_name: string;
     email: string;
   };
+  customer?: Customer | null;
+  business_partner?: Partner | null;
 }
 
 export interface Opportunity {
@@ -173,6 +199,21 @@ export interface Partner {
   description: string;
   logo_key?: string;
   website_url?: string;
+  commission_rate_percent?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  company_name?: string | null;
+  contact_person?: string | null;
+  reference_person?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  created_by?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -212,6 +253,7 @@ export interface Database {
   plan_feature_values: PlanFeatureValue[];
   entry_fee_settings: EntryFeeSettings[];
   partners: Partner[];
+  customers: Customer[];
   benefits: Benefit[];
   customer_opportunities: CustomerOpportunity[];
   opportunities: Opportunity[];

@@ -1,21 +1,21 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET() {
   try {
-    const supabase = createClient();
+    const lbcData = createClient();
 
     const [{ data: plans, error: plansError }, { data: features, error: featuresError }] =
       await Promise.all([
-        supabase.from('membership_plans').select('*').eq('is_active', true).order('sort_order'),
-        supabase.from('plan_features').select('*').eq('is_active', true).order('sort_order'),
+        lbcData.from('membership_plans').select('*').eq('is_active', true).order('sort_order'),
+        lbcData.from('plan_features').select('*').eq('is_active', true).order('sort_order'),
       ]);
 
     if (plansError) throw plansError;
     if (featuresError) throw featuresError;
     if (!plans || plans.length === 0) return NextResponse.json([]);
 
-    const { data: featureValues, error: fvError } = await supabase
+    const { data: featureValues, error: fvError } = await lbcData
       .from('plan_feature_values')
       .select('id, plan_id, feature_id, is_included, text_value')
       .in('plan_id', plans.map(p => p.id));

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
-import { deleteFileFromS3 } from '@/lib/s3UploadUtils';
 import {
-  deleteFileFromSupabaseStorage,
-  uploadFileToSupabaseStorage,
+  deleteFileFromAssetStorage,
+  uploadFileToAssetStorage,
   type StorageFileType,
 } from '@/lib/storageUploadUtils';
 
@@ -15,9 +13,6 @@ const validFileTypes: StorageFileType[] = [
   'PARTNERS_LOGOS',
   'BENEFITS_IMAGES',
 ];
-
-const canAttemptLegacyS3Delete = () =>
-  Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
 
 export async function handleStorageUploadPost(request: NextRequest) {
   try {
@@ -43,7 +38,7 @@ export async function handleStorageUploadPost(request: NextRequest) {
       );
     }
 
-    const uploadResult = await uploadFileToSupabaseStorage(
+    const uploadResult = await uploadFileToAssetStorage(
       file,
       session.id.toString(),
       fileType
@@ -77,13 +72,7 @@ export async function handleStorageUploadDelete(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', session.id)
-      .single();
-
-    if (userError || !user?.is_admin) {
+    if (!session.is_admin && session.role !== 'admin') {
       return NextResponse.json({ success: false, error: 'Admin yetkisi gerekiyor' }, { status: 403 });
     }
 
@@ -97,12 +86,9 @@ export async function handleStorageUploadDelete(request: NextRequest) {
       );
     }
 
-    const deletedFromStorage = await deleteFileFromSupabaseStorage(key);
-    const deletedFromLegacyS3 = canAttemptLegacyS3Delete()
-      ? await deleteFileFromS3(key)
-      : false;
+    const deletedFromStorage = await deleteFileFromAssetStorage(key);
 
-    if (!deletedFromStorage && !deletedFromLegacyS3) {
+    if (!deletedFromStorage) {
       return NextResponse.json(
         { success: false, error: 'Failed to delete file' },
         { status: 500 }
@@ -113,7 +99,6 @@ export async function handleStorageUploadDelete(request: NextRequest) {
       success: true,
       message: 'File deleted successfully',
       deletedFromStorage,
-      deletedFromLegacyS3,
     });
   } catch (error) {
     console.error('Unexpected error in storage delete:', error);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 export async function GET(req: NextRequest) {
   const user = await validateSession(req);
@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const lbcData = createClient();
+  const { data, error } = await lbcData
     .from('plan_features')
     .select('*')
     .order('sort_order', { ascending: true });
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'key, label and value_type are required' }, { status: 400 });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const lbcData = createClient();
+  const { data, error } = await lbcData
     .from('plan_features')
     .insert({ key, label, description, value_type, sort_order: sort_order ?? 0, is_active: true })
     .select()
@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Yeni özellik için tüm planlara varsayılan değer ekle
-  const { data: plans } = await supabase.from('membership_plans').select('id');
+  const { data: plans } = await lbcData.from('membership_plans').select('id');
   if (plans && plans.length > 0) {
-    await supabase.from('plan_feature_values').insert(
+    await lbcData.from('plan_feature_values').insert(
       plans.map((p: { id: number }) => ({
         plan_id: p.id,
         feature_id: data.id,

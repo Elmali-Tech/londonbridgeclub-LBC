@@ -7,7 +7,8 @@ import StatsCard from "@/app/components/admin/StatsCard";
 import Card from "@/app/components/admin/Card";
 import DataTable from "@/app/components/admin/DataTable";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
+import { formatGBPAmount, getOpportunityValueInGBP } from "@/lib/currency";
 import { User, CustomerOpportunity } from "@/types/database";
 
 // Modern Icon Set
@@ -73,10 +74,12 @@ export default function AdminDashboardPage() {
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
 
-  const parseVolume = (value?: string | null) => {
-    if (!value) return 0;
-    const parsed = parseFloat(value.replace(/[^0-9.-]+/g, ""));
-    return Number.isFinite(parsed) ? parsed : 0;
+  const getOpportunityValue = (opp: {
+    estimated_deal_size?: string | null;
+    estimated_deal_value?: number | string | null;
+    currency_code?: string | null;
+  }) => {
+    return getOpportunityValueInGBP(opp);
   };
 
   useEffect(() => {
@@ -99,22 +102,24 @@ export default function AdminDashboardPage() {
           { data: oppsData },
           { data: allOpportunityRevenueData },
         ] = await Promise.all([
-          supabase.from("users").select("*", { count: "exact", head: true }),
-          supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("customer_opportunities").select("*", { count: "exact", head: true }),
-          supabase.from("customer_opportunities").select("*", { count: "exact", head: true }).eq("status", "Won"),
-          supabase.from("users").select("*").order("created_at", { ascending: false }).limit(6),
-          supabase.from("customer_opportunities").select("*").order("created_at", { ascending: false }).limit(5),
-          supabase.from("customer_opportunities").select("estimated_deal_size, status"),
+          lbcData.from("users").select("*", { count: "exact", head: true }),
+          lbcData.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
+          lbcData.from("customer_opportunities").select("*", { count: "exact", head: true }),
+          lbcData.from("customer_opportunities").select("*", { count: "exact", head: true }).eq("status", "Won"),
+          lbcData.from("users").select("*").order("created_at", { ascending: false }).limit(6),
+          lbcData.from("customer_opportunities").select("*").order("created_at", { ascending: false }).limit(5),
+          lbcData
+            .from("customer_opportunities")
+            .select("estimated_deal_size, estimated_deal_value, currency_code, status"),
         ]);
 
         const totalPotentialRevenue = (allOpportunityRevenueData || []).reduce(
-          (sum, opp) => sum + parseVolume(opp.estimated_deal_size),
+          (sum, opp) => sum + getOpportunityValue(opp),
           0,
         );
         const capturedRevenue = (allOpportunityRevenueData || [])
           .filter((opp) => opp.status === "Won")
-          .reduce((sum, opp) => sum + parseVolume(opp.estimated_deal_size), 0);
+          .reduce((sum, opp) => sum + getOpportunityValue(opp), 0);
 
         setStats({
           usersCount: usersCount || 0,
@@ -294,11 +299,11 @@ export default function AdminDashboardPage() {
           <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-3 lg:max-w-2xl">
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Captured</p>
-              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">${stats.capturedRevenue.toLocaleString()}</p>
+              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{formatGBPAmount(stats.capturedRevenue)}</p>
             </div>
             <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Potential</p>
-              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">${stats.totalPotentialRevenue.toLocaleString()}</p>
+              <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{formatGBPAmount(stats.totalPotentialRevenue)}</p>
             </div>
             <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Efficiency</p>

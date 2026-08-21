@@ -1,12 +1,105 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase";
 import { validateSession } from "@/lib/auth";
+import { callLbcEndpoint } from "@/lib/lbc-api";
+import { getLbcKpiOpportunityRows } from "@/lib/lbc-kpi-adapter";
+import { resolveCommissionFields } from "@/lib/commission";
+import type { DealValuationPeriod, User } from "@/types/database";
 
-const normalizeDealStage = (stage?: string | null) => {
-  if (!stage || stage === "Prospect") return "Lead";
-  if (stage === "Opportunity") return "Qualified";
-  return stage;
+type RequestBody = Record<string, unknown>;
+
+const DEAL_VALUATION_PERIODS: DealValuationPeriod[] = [
+  "one_time",
+  "monthly",
+  "quarterly",
+  "six_months",
+  "annual",
+];
+
+const canManage = (user: User | null) =>
+  Boolean(
+    user?.is_admin ||
+      user?.role === "admin" ||
+      user?.role === "opportunity_manager",
+  );
+
+const canSubmit = (user: User | null) =>
+  Boolean(user && (canManage(user) || user.is_approved));
+
+const getString = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
+
+const getNullableString = (value: unknown) => getString(value) || null;
+
+const normalizeRecordType = (value: unknown) =>
+  value === "opportunity" ? "opportunity" : "lead";
+
+const normalizeDealStage = (value: unknown, recordType: string) => {
+  const stage = getString(value);
+  if (!stage || stage === "Prospect") {
+    return recordType === "opportunity" ? "Qualified" : "Lead";
+  }
+  return stage === "Opportunity" ? "Qualified" : stage;
 };
+
+const normalizeDealValuationPeriod = (value: unknown): DealValuationPeriod =>
+  DEAL_VALUATION_PERIODS.includes(value as DealValuationPeriod)
+    ? (value as DealValuationPeriod)
+    : "one_time";
+
+function buildProjectPayload(body: RequestBody, session: User) {
+  const recordType = normalizeRecordType(body.record_type);
+  const customerName = getString(body.customer_name);
+  const companyName = getString(body.company_name) || customerName;
+  const name = getString(body.opportunity_title);
+
+  if (!customerName || !companyName || !name) {
+    throw new Error("MISSING_REQUIRED_FIELDS");
+  }
+
+  const financials = resolveCommissionFields({
+    estimatedDealSize: body.estimated_deal_size,
+    estimatedDealValue: body.estimated_deal_value,
+    commissionRate: body.commission_rate,
+    commissionRatePercent: body.commission_rate_percent,
+    lbcCommission: body.lbc_commission,
+    lbcCommissionAmount: body.lbc_commission_amount,
+    currencyCode: getString(body.currency_code) || undefined,
+  });
+  const status = canManage(session) ? getString(body.status) || "Active" : "Active";
+
+  return {
+    name,
+    project_no: getNullableString(body.project_no),
+    type: recordType,
+    category: recordType,
+    status,
+    stage: normalizeDealStage(body.deal_stage, recordType),
+    description: getNullableString(body.opportunity_description),
+    customer_name: customerName,
+    company_name: companyName,
+    contact_person: getNullableString(body.contact_person),
+    referrer_name:
+      getNullableString(body.referral_source) ||
+      getNullableString(body.reference_person),
+    partner_id: getNullableString(body.partner_id),
+    partner_name: getNullableString(body.partner_name),
+    revenue: {
+      amount: financials.estimatedDealValue,
+      currency: financials.currencyCode,
+      label: getNullableString(body.estimated_deal_size),
+      period: normalizeDealValuationPeriod(body.deal_valuation_period),
+    },
+    commission_rate: financials.commissionRatePercent,
+    commission_amount: {
+      amount: financials.lbcCommissionAmount,
+      currency: financials.currencyCode,
+    },
+    expected_closing_date: getNullableString(body.expected_closing_date),
+    lead_manager: getNullableString(body.responsible_person) || session.full_name,
+    owner_member_id: session.lbc_record_id || session.lbc_member_id || null,
+    source: "lbc-web",
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -18,31 +111,34 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = createClient();
-    const { data: opportunities, error } = await supabase
-      .from("customer_opportunities")
-      .select(
-        `
-        *,
-        created_by_user:users!customer_opportunities_created_by_fkey (
-          full_name,
-          email
-        )
-      `,
-      )
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Fetch opportunities error:", error);
+    const result = await getLbcKpiOpportunityRows();
+    if (result.errors.length > 0) {
       return NextResponse.json(
-        { success: false, error: "Failed to fetch opportunities" },
-        { status: 500 },
+        {
+          success: false,
+          error: "Failed to fetch LBC projects",
+          code: "LBC_PROJECTS_UNAVAILABLE",
+          details: result.errors,
+        },
+        { status: 502 },
       );
     }
 
-    return NextResponse.json({ success: true, opportunities });
+    const opportunities = canManage(session)
+      ? result.rows
+      : result.rows.filter(
+          (row) =>
+            row.responsible_person === session.full_name ||
+            row.created_by_user?.email === session.email,
+        );
+
+    return NextResponse.json({
+      success: true,
+      opportunities,
+      dataSource: { primary: "lbc-api", endpoint: "/projects" },
+    });
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("LBC projects API error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },
@@ -59,115 +155,44 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
-
-    const supabase = createClient();
-
-    // Check if user has permission to create
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (
-      userError ||
-      !user ||
-      (user.role !== "admin" && user.role !== "opportunity_manager")
-    ) {
+    if (!canSubmit(session)) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Forbidden: You do not have permission to create opportunities",
-        },
+        { success: false, error: "Forbidden" },
         { status: 403 },
       );
     }
 
-    const body = await request.json();
-    const {
-      customer_name,
-      company_name,
-      contact_person,
-      opportunity_title,
-      opportunity_description,
-      estimated_deal_size,
-      referral_source,
-      commission_rate,
-      lbc_commission,
-      deal_stage,
-      responsible_person,
-      expected_closing_date,
-      status,
-    } = body;
+    const body = (await request.json()) as RequestBody;
+    const payload = buildProjectPayload(body, session);
+    const result = await callLbcEndpoint("/projects", {
+      logicalMethod: "POST",
+      payload,
+      idempotencyKey:
+        request.headers.get("idempotency-key") ||
+        `project:${session.lbc_record_id || session.id}:${payload.name}`,
+    });
 
-    if (!customer_name || !company_name || !opportunity_title) {
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error || "LBC project creation failed",
+          code: result.bodyError?.code || "LBC_PROJECT_CREATE_FAILED",
+          details: result.bodyError?.details,
+        },
+        { status: result.status >= 400 ? result.status : 502 },
+      );
+    }
+
+    return NextResponse.json({ success: true, opportunity: result.data });
+  } catch (error) {
+    if (error instanceof Error && error.message === "MISSING_REQUIRED_FIELDS") {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 },
       );
     }
-
-    // Clean data: empty strings to null for date fields
-    const formattedDate =
-      expected_closing_date && expected_closing_date.trim() !== ""
-        ? expected_closing_date
-        : null;
-
-    const { data, error } = await supabase
-      .from("customer_opportunities")
-      .insert([
-        {
-          customer_name,
-          company_name,
-          contact_person: contact_person || null,
-          opportunity_title,
-          opportunity_description: opportunity_description || null,
-          estimated_deal_size: estimated_deal_size || null,
-          referral_source: referral_source || null,
-          commission_rate: commission_rate || null,
-          lbc_commission: lbc_commission || null,
-          deal_stage: normalizeDealStage(deal_stage),
-          responsible_person: responsible_person || null,
-          expected_closing_date: formattedDate,
-          status: status || "Active",
-          created_by: session.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select();
-
-    if (error) {
-      console.error("Create opportunity error:", error);
-      return NextResponse.json(
-        { success: false, error: "Failed to create opportunity" },
-        { status: 500 },
-      );
-    }
-
-    // Send email notification
-    try {
-      const { sendSystemNotification } = await import("@/lib/nodemailer");
-      await sendSystemNotification("New Opportunity Created", `
-        A new CRM lead has been added to the CRM Pipeline:
-        - Client: ${customer_name}
-        - Company: ${company_name}
-        - Opportunity: ${opportunity_title}
-        - Estimated Size: ${estimated_deal_size || 'N/A'}
-        - Referral Source: ${referral_source || 'N/A'}
-        - LBC Commission: ${lbc_commission || 'N/A'}
-        - Commission Rate: ${commission_rate || 'N/A'}
-        - Stage: ${deal_stage}
-        - Responsible: ${responsible_person || 'Unassigned'}
-      `);
-    } catch (notifyError) {
-      console.error("Notification Error:", notifyError);
-    }
-
-    return NextResponse.json({ success: true, opportunity: data[0] });
-  } catch (error) {
-    console.error("API Error:", error);
+    console.error("LBC project creation error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

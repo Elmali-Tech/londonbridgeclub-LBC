@@ -1,30 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getLbcMembers } from '@/lib/lbc-auth';
+import { mapLbcMemberToDashboardMember } from '@/lib/lbc-members';
 
 export async function GET(req: NextRequest) {
   try {
-    // Get users who joined in the last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, full_name, headline, profile_image_key, created_at')
-      .gte('created_at', sevenDaysAgo.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(4); // Limit to 4 most recent users
-
-    if (error) {
-      console.error('Error fetching recent users:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch recent users' },
-        { status: 500 }
-      );
-    }
+    const users = (await getLbcMembers())
+        .sort((a, b) => {
+          const bDate = new Date(b.membership_start || b.created_at || 0).getTime();
+          const aDate = new Date(a.membership_start || a.created_at || 0).getTime();
+          return bDate - aDate;
+        })
+        .slice(0, 4)
+        .map(mapLbcMemberToDashboardMember);
 
     return NextResponse.json({
-      users: users || [],
-      count: users?.length || 0
+      users,
+      count: users.length,
+      dataSource: { primary: 'lbc-api', endpoint: '/members' },
     });
 
   } catch (error) {
@@ -35,4 +27,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

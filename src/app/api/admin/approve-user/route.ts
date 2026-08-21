@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { sendUserApprovedEmail } from "@/lib/nodemailer";
 import { validateToken } from "@/lib/auth";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Kullanıcı bilgilerini al
-    const { data: user, error: fetchError } = await supabase
+    const { data: user, error: fetchError } = await lbcData
       .from("users")
       .select("*")
       .eq("id", userId)
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Kullanıcıyı onayla
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from("users")
       .update({ 
         is_approved: true,

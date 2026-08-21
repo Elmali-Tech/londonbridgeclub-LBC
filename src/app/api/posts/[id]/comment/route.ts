@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // POST request - Yorum ekleme
 export async function POST(
@@ -39,11 +39,11 @@ export async function POST(
       );
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // First, check if the post exists
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .select('id, comments_count')
       .eq('id', postId)
@@ -57,7 +57,7 @@ export async function POST(
     }
 
     // Yorumu ekle
-    const { data: comment, error: insertError } = await supabase
+    const { data: comment, error: insertError } = await lbcData
       .from('comments')
       .insert({
         post_id: postId,
@@ -78,7 +78,7 @@ export async function POST(
     }
 
     // Post'un comments_count değerini arttır
-    const { error: updateError } = await supabase
+    const { error: updateError } = await lbcData
       .from('posts')
       .update({ comments_count: (post?.comments_count || 0) + 1 })
       .eq('id', postId);
@@ -120,11 +120,11 @@ export async function GET(
     const session = await validateSession(request);
     const userId = session ? session.id.toString() : null;
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Yorumları getir - kullanıcı bilgileriyle birlikte
-    const { data: comments, error: fetchError } = await supabase
+    const { data: comments, error: fetchError } = await lbcData
       .from('comments')
       .select(`
         *,
@@ -143,7 +143,7 @@ export async function GET(
 
     // Eğer kullanıcı oturum açmışsa, beğenileri kontrol et
     if (userId) {
-      const { data: likedComments, error: likeError } = await supabase
+      const { data: likedComments, error: likeError } = await lbcData
         .from('comment_likes')
         .select('comment_id')
         .eq('user_id', userId);

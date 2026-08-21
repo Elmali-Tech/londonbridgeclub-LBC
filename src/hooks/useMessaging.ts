@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase'; // Use singleton client
+import { lbcData } from '@/lib/lbc-data'; // Use singleton client
 import { Chat, Message, ChatWithMessages } from '@/types/messaging';
 import Cookies from 'js-cookie';
 
@@ -388,7 +388,7 @@ export function useMessaging() {
 
     // Cleanup existing channels
     activeChannelsRef.current.forEach(channelName => {
-      supabase.removeChannel(supabase.channel(channelName));
+      lbcData.removeChannel(lbcData.channel(channelName));
     });
     activeChannelsRef.current.clear();
 
@@ -397,7 +397,7 @@ export function useMessaging() {
     
     if (activeChat) {
       const messagesChannelName = `messages-${activeChat.id}-${user.id}`;
-      messagesChannel = supabase
+      messagesChannel = lbcData
         .channel(messagesChannelName)
         .on(
           'postgres_changes',
@@ -426,7 +426,7 @@ export function useMessaging() {
 
     // Global chat updates (less frequent)
     const chatsChannelName = `chats-updates-${user.id}`;
-    const chatsChannel = supabase
+    const chatsChannel = lbcData
       .channel(chatsChannelName)
       .on(
         'postgres_changes',
@@ -447,7 +447,7 @@ export function useMessaging() {
     return () => {
       console.log('Cleaning up realtime subscriptions');
       activeChannelsRef.current.forEach(channelName => {
-        supabase.removeChannel(supabase.channel(channelName));
+        lbcData.removeChannel(lbcData.channel(channelName));
       });
       activeChannelsRef.current.clear();
     };
@@ -481,7 +481,7 @@ export function useMessaging() {
   useEffect(() => {
     return () => {
       activeChannelsRef.current.forEach(channelName => {
-        supabase.removeChannel(supabase.channel(channelName));
+        lbcData.removeChannel(lbcData.channel(channelName));
       });
       activeChannelsRef.current.clear();
     };

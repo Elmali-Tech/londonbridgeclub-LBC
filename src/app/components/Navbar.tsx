@@ -107,8 +107,10 @@ export default function Navbar({ currentPage = 'default', showAuth = true, varia
   };
 
   const navigationLinks = [
-    { href: '/about', label: 'ABOUT' },
-    { href: '/membership', label: 'MEMBERSHIP' },
+    { href: '/#business-model', label: 'MODEL' },
+    { href: '/#membership-tiers', label: 'MEMBERSHIP' },
+    { href: '/#ecosystem', label: 'ECOSYSTEM' },
+    { href: '/#investors', label: 'INVESTORS' },
     { href: '/contact', label: 'CONTACT' },
   ];
 

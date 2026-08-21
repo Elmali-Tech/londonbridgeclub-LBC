@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { Partner } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { AllowedFileTypes } from "@/lib/awsConfig";
 import { getAssetPublicUrl } from "@/lib/storage";
+import { formatCommissionRate, parsePercentValue } from "@/lib/commission";
 import Image from "next/image";
 import { FiGrid, FiList, FiPlus, FiEdit2, FiTrash2, FiImage, FiBriefcase, FiLink } from "react-icons/fi";
 
@@ -26,6 +27,7 @@ export default function PartnersPage() {
     name: "",
     description: "",
     website_url: "",
+    commission_rate_percent: "",
     logo: null as File | null,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export default function PartnersPage() {
 
   const fetchOpportunities = async () => {
     try {
-      const { data, error } = await supabase.from('customer_opportunities').select('company_name');
+      const { data, error } = await lbcData.from('customer_opportunities').select('company_name');
       if (data) setOpportunities(data);
     } catch (error) {
       console.error('Error fetching opportunities:', error);
@@ -63,7 +65,7 @@ export default function PartnersPage() {
   const fetchPartners = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from("partners")
         .select("*")
         .order("created_at", { ascending: false });
@@ -97,6 +99,7 @@ export default function PartnersPage() {
         name: partner.name,
         description: partner.description,
         website_url: partner.website_url || "",
+        commission_rate_percent: partner.commission_rate_percent?.toString() || "",
         logo: null,
       });
       setLogoPreview(getPartnerLogoUrl(partner.logo_key) || null);
@@ -107,6 +110,7 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        commission_rate_percent: "",
         logo: null,
       });
       setLogoPreview(null);
@@ -122,6 +126,7 @@ export default function PartnersPage() {
         name: "",
         description: "",
         website_url: "",
+        commission_rate_percent: "",
         logo: null,
       });
     }, 300);
@@ -220,12 +225,14 @@ export default function PartnersPage() {
       }
 
       if (isEditMode && selectedPartner) {
-        const { error } = await supabase
+        const { error } = await lbcData
           .from("partners")
           .update({
             name: formData.name,
             description: formData.description,
             website_url: formData.website_url || null,
+            commission_rate_percent:
+              parsePercentValue(formData.commission_rate_percent) ?? 0,
             logo_key,
             updated_at: new Date().toISOString(),
           })
@@ -234,10 +241,12 @@ export default function PartnersPage() {
         if (error) throw error;
         toast.success("Partner company updated successfully");
       } else {
-        const { error } = await supabase.from("partners").insert({
+        const { error } = await lbcData.from("partners").insert({
           name: formData.name,
           description: formData.description,
           website_url: formData.website_url || null,
+          commission_rate_percent:
+            parsePercentValue(formData.commission_rate_percent) ?? 0,
           logo_key,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -284,7 +293,7 @@ export default function PartnersPage() {
       setIsSubmitting(true);
       const partnerToDelete = partners.find((p) => p.id === id);
 
-      const { error } = await supabase.from("partners").delete().eq("id", id);
+      const { error } = await lbcData.from("partners").delete().eq("id", id);
       if (error) throw error;
 
       if (partnerToDelete?.logo_key) {
@@ -421,6 +430,17 @@ export default function PartnersPage() {
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Contract Commission Rate</label>
+              <input
+                name="commission_rate_percent"
+                value={formData.commission_rate_percent}
+                onChange={handleInputChange}
+                placeholder="E.g. 10%"
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Corporate Details / Mission</label>
               <textarea
                 name="description"
@@ -517,6 +537,9 @@ export default function PartnersPage() {
                         <span className="text-[10px] font-black uppercase bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-500">
                           {opportunities.filter(o => o.company_name?.toLowerCase() === partner.name.toLowerCase()).length} Prospects
                         </span>
+                        <span className="text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-300">
+                          {formatCommissionRate(partner.commission_rate_percent || 0)}
+                        </span>
                      </div>
                   </div>
                 </div>
@@ -592,6 +615,9 @@ export default function PartnersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium max-w-sm">
                        <p className="line-clamp-2 leading-relaxed">{partner.description}</p>
+                       <p className="mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                         Commission: {formatCommissionRate(partner.commission_rate_percent || 0)}
+                       </p>
                     </td>
                     <td className="px-6 py-4 text-right">
                        {deleteConfirmId === partner.id ? (

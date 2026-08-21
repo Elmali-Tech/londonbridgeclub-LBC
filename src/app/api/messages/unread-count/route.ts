@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 // GET - Kullanıcının okunmamış mesaj sayısını getir
 export async function GET(request: NextRequest) {
@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const lbcData = createClient();
 
     // Database fonksiyonunu kullanarak okunmamış mesaj sayısını al
-    const { data: unreadCount, error } = await supabase.rpc('get_user_unread_count', {
+    const { data: unreadCount, error } = await lbcData.rpc('get_user_unread_count', {
       target_user_id: user.id
     });
 

@@ -30,10 +30,16 @@ export default function DashboardLayout({
 
       if (!isLoading && user?.id) {
         try {
-          const [status, hasRecord] = await Promise.all([
-            fetchSubscriptionStatus(user.id),
-            hasAnySubscription(user.id),
-          ]);
+          const [status, hasRecord] =
+            user.auth_provider === "lbc"
+              ? [
+                  user.subscription_status === "active" ? "active" : "inactive",
+                  Boolean(user.lbc_record_id),
+                ]
+              : await Promise.all([
+                  fetchSubscriptionStatus(user.id),
+                  hasAnySubscription(user.id),
+                ]);
 
           const isActive = status === "active";
 

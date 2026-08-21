@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
 import { eventNotificationDetails, EventRecord, parseEventFormData, uploadEventImage } from './eventUtils';
 
@@ -8,8 +8,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
-    const supabase = createClient();
-    let query = supabase.from('events').select('*');
+    const lbcData = createClient();
+    let query = lbcData.from('events').select('*');
 
     if (id) {
       query = query.eq('id', id);
@@ -58,8 +58,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createClient();
-    const { data: event, error } = await supabase
+    const lbcData = createClient();
+    const { data: event, error } = await lbcData
       .from('events')
       .insert([
         {

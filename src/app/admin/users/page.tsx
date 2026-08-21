@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { lbcData } from "@/lib/lbc-data";
 import { User, UserRole } from "@/types/database";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { toast } from "react-hot-toast";
@@ -33,7 +33,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from("users")
         .select("*")
         .order("created_at", { ascending: false });
@@ -74,7 +74,7 @@ export default function UsersPage() {
 
   const updateRole = async (userId: number, newRole: UserRole) => {
     try {
-      const { error } = await supabase
+      const { error } = await lbcData
         .from("users")
         .update({ role: newRole })
         .eq("id", userId);
@@ -126,7 +126,7 @@ export default function UsersPage() {
   const deleteUser = async (userId: number) => {
     try {
       setIsDeleting(userId);
-      const { error } = await supabase.from("users").delete().eq("id", userId);
+      const { error } = await lbcData.from("users").delete().eq("id", userId);
 
       if (error) throw error;
 

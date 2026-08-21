@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/lbc-data';
 import { validateSession } from '@/lib/auth';
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { uploadBufferToAssetStorage } from '@/lib/storageUploadUtils';
 
 interface Opportunity {
   id: number;
@@ -19,12 +19,12 @@ interface Opportunity {
 
 export async function GET(request: Request) {
   try {
-    const supabase = createClient();
+    const lbcData = createClient();
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const includeInactive = url.searchParams.get('includeInactive') === '1';
     if (id) {
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from('opportunities')
         .select('*')
         .eq('id', id)
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       }
     }
 
-    let query = supabase
+    let query = lbcData
       .from('opportunities')
       .select('*')
       .order('created_at', { ascending: false });
@@ -98,19 +98,19 @@ export async function POST(request: Request) {
       // Generate unique file name
       const ext = imageFile.name.split('.').pop();
       const fileName = `opportunities/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const uploadResult = await uploadBufferToSupabaseStorage(
+      const uploadResult = await uploadBufferToAssetStorage(
         fileName,
         Buffer.from(await imageFile.arrayBuffer()),
         imageFile.type
       );
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+        throw new Error(uploadResult.error || 'Asset storage upload failed');
       }
       image_key = fileName;
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
+    const lbcData = createClient();
+    const { data, error } = await lbcData
       .from('opportunities')
       .insert([
         {

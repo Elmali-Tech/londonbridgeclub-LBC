@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase";
 import { validateSession } from "@/lib/auth";
+import { callLbcEndpoint, type LbcEndpoint } from "@/lib/lbc-api";
+import type { User } from "@/types/database";
 
-const normalizeDealStage = (stage?: string | null) => {
-  if (!stage || stage === "Prospect") return "Lead";
-  if (stage === "Opportunity") return "Qualified";
-  return stage;
-};
+const canManage = (user: User | null) =>
+  Boolean(
+    user?.is_admin ||
+      user?.role === "admin" ||
+      user?.role === "opportunity_manager",
+  );
+
+const errorResponse = (result: Awaited<ReturnType<typeof callLbcEndpoint>>) =>
+  NextResponse.json(
+    {
+      success: false,
+      error: result.error || "LBC project mutation failed",
+      code: result.bodyError?.code || "LBC_PROJECT_MUTATION_FAILED",
+      details: result.bodyError?.details,
+    },
+    { status: result.status >= 400 ? result.status : 502 },
+  );
 
 export async function PUT(
   request: Request,
@@ -20,84 +33,36 @@ export async function PUT(
         { status: 401 },
       );
     }
-
-    const supabase = createClient();
-
-    // Check permission
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (
-      userError ||
-      !user ||
-      (user.role !== "admin" && user.role !== "opportunity_manager")
-    ) {
+    if (!canManage(session)) {
       return NextResponse.json(
         { success: false, error: "Forbidden: Insufficient permissions" },
         { status: 403 },
       );
     }
 
-    const body = await request.json();
     const { id } = await params;
-
-    // Clean data: empty strings to null for date fields
-    if (body.expected_closing_date === "") {
-      body.expected_closing_date = null;
-    }
-    if (body.deal_stage) {
-      body.deal_stage = normalizeDealStage(body.deal_stage);
-    }
-
-    const { data, error } = await supabase
-      .from("customer_opportunities")
-      .update({
-        ...body,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select();
-
-    if (error) {
-      console.error("Update opportunity error:", error);
-      return NextResponse.json(
-        { success: false, error: "Failed to update" },
-        { status: 500 },
-      );
-    }
-
-    if (!data || data.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Update failed: No record found or invisible",
+    const body = await request.json();
+    const result = await callLbcEndpoint(
+      `/projects/${encodeURIComponent(id)}` as LbcEndpoint,
+      {
+        logicalMethod: "PATCH",
+        payload: {
+          ...body,
+          updated_by_member_id:
+            session.lbc_record_id || session.lbc_member_id || null,
+          source: "lbc-web",
         },
-        { status: 404 },
-      );
-    }
+        idempotencyKey:
+          request.headers.get("idempotency-key") ||
+          `project-update:${id}:${Date.now()}`,
+      },
+    );
 
-    // Send email notification
-    try {
-      const { sendSystemNotification } = await import("@/lib/nodemailer");
-      await sendSystemNotification("Opportunity Updated", `
-        An opportunity has been modified in the CRM Pipeline:
-        - ID: ${id}
-        - Client: ${data[0].customer_name}
-        - Company: ${data[0].company_name}
-        - Title: ${data[0].opportunity_title}
-        - New Stage: ${data[0].deal_stage}
-        - New Status: ${data[0].status}
-      `);
-    } catch (notifyError) {
-      console.error("Notification Error:", notifyError);
-    }
-
-    return NextResponse.json({ success: true, opportunity: data[0] });
+    return result.success
+      ? NextResponse.json({ success: true, opportunity: result.data })
+      : errorResponse(result);
   } catch (error) {
-    console.error("API Error (PUT):", error);
+    console.error("LBC project update error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },
@@ -117,17 +82,7 @@ export async function DELETE(
         { status: 401 },
       );
     }
-
-    const supabase = createClient();
-
-    // Check permission
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.id)
-      .single();
-
-    if (userError || !user || user.role !== "admin") {
+    if (!session.is_admin && session.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Forbidden: Only admins can delete" },
         { status: 403 },
@@ -135,34 +90,24 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const { error } = await supabase
-      .from("customer_opportunities")
-      .delete()
-      .eq("id", id);
+    const result = await callLbcEndpoint(
+      `/projects/${encodeURIComponent(id)}` as LbcEndpoint,
+      {
+        logicalMethod: "DELETE",
+        payload: {
+          deleted_by_member_id:
+            session.lbc_record_id || session.lbc_member_id || null,
+        },
+        idempotencyKey:
+          request.headers.get("idempotency-key") || `project-delete:${id}`,
+      },
+    );
 
-    if (error) {
-      console.error("Delete opportunity error:", error);
-      return NextResponse.json(
-        { success: false, error: "Failed to delete" },
-        { status: 500 },
-      );
-    }
-
-    // Send email notification
-    try {
-      const { sendSystemNotification } = await import("@/lib/nodemailer");
-      await sendSystemNotification("Opportunity Deleted", `
-        An opportunity has been removed from the CRM Pipeline:
-        - Opportunity ID: ${id}
-        - Deleted By: ${session.id}
-      `);
-    } catch (notifyError) {
-      console.error("Notification Error:", notifyError);
-    }
-
-    return NextResponse.json({ success: true });
+    return result.success
+      ? NextResponse.json({ success: true })
+      : errorResponse(result);
   } catch (error) {
-    console.error("API Error (DELETE):", error);
+    console.error("LBC project delete error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

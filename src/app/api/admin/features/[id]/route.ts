@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,9 +12,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await req.json();
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { data, error } = await supabase
+  const { data, error } = await lbcData
     .from('plan_features')
     .update(body)
     .eq('id', id)
@@ -32,9 +32,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const supabase = createClient();
+  const lbcData = createClient();
 
-  const { error } = await supabase
+  const { error } = await lbcData
     .from('plan_features')
     .update({ is_active: false })
     .eq('id', id);

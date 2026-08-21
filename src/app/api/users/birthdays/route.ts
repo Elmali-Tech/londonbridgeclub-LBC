@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { LbcMember } from '@/lib/lbc-api';
+import { getLbcMembers } from '@/lib/lbc-auth';
+import { mapLbcMemberToDashboardMember } from '@/lib/lbc-members';
+
+type LbcMemberWithBirthday = LbcMember & {
+  date_of_birth?: string | null;
+  birth_date?: string | null;
+  birthday?: string | null;
+};
+
+function getLbcBirthday(member: LbcMemberWithBirthday) {
+  return member.date_of_birth || member.birth_date || member.birthday || null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,31 +20,23 @@ export async function GET(req: NextRequest) {
     const month = today.getMonth() + 1; // JavaScript months are 0-indexed
     const day = today.getDate();
 
-    // Query users whose birthday is today
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, full_name, headline, profile_image_key, date_of_birth')
-      .not('date_of_birth', 'is', null)
-      .order('full_name', { ascending: true });
+    const users = (await getLbcMembers())
+        .filter((member) => {
+          const birthday = getLbcBirthday(member as LbcMemberWithBirthday);
+          if (!birthday) return false;
 
-    if (error) {
-      console.error('Error fetching birthday users:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch birthday users' },
-        { status: 500 }
-      );
-    }
-
-    // Filter users whose birthday is today (month and day match)
-    const birthdayUsers = users?.filter(user => {
-      if (!user.date_of_birth) return false;
-      const birthDate = new Date(user.date_of_birth);
-      return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
-    }) || [];
+          const birthDate = new Date(birthday);
+          return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
+        })
+        .map((member) => ({
+          ...mapLbcMemberToDashboardMember(member),
+          date_of_birth: getLbcBirthday(member as LbcMemberWithBirthday),
+        }));
 
     return NextResponse.json({
-      users: birthdayUsers,
-      count: birthdayUsers.length
+      users,
+      count: users.length,
+      dataSource: { primary: 'lbc-api', endpoint: '/members' },
     });
 
   } catch (error) {
@@ -43,4 +47,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

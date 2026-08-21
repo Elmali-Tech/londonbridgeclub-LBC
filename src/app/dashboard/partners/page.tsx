@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { lbcData } from '@/lib/lbc-data';
 import { Partner } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
 import DashboardContainer from '@/app/components/dashboard/DashboardContainer';
 import { getAssetPublicUrl } from '@/lib/storage';
+import { formatCommissionRate } from '@/lib/commission';
 
 export default function PartnersPage() {
   const { user } = useAuth();
@@ -16,6 +17,19 @@ export default function PartnersPage() {
   const getPartnerLogoUrl = (logoKey?: string | null) =>
     logoKey ? getAssetPublicUrl(logoKey) : '';
 
+  const inferPartnerCategory = (partner: Partner) => {
+    const source = `${partner.name} ${partner.description || ''}`.toLowerCase();
+    if (source.includes('energy') || source.includes('enerji')) return 'Energy';
+    if (source.includes('travel') || source.includes('tour') || source.includes('seyahat')) return 'Travel';
+    if (source.includes('insurance') || source.includes('sigorta')) return 'Insurance';
+    if (source.includes('real estate') || source.includes('property') || source.includes('gayrimenkul')) return 'Real Estate';
+    if (source.includes('tech') || source.includes('software') || source.includes('digital')) return 'Technology';
+    if (source.includes('procurement') || source.includes('satın') || source.includes('satin')) return 'Procurement';
+    if (source.includes('event')) return 'Events';
+    if (source.includes('marketing')) return 'Digital Marketing';
+    return 'Supplier';
+  };
+
   useEffect(() => {
     fetchPartners();
   }, []);
@@ -23,7 +37,7 @@ export default function PartnersPage() {
   const fetchPartners = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await lbcData
         .from('partners')
         .select('*')
         .order('name', { ascending: true });
@@ -44,9 +58,15 @@ export default function PartnersPage() {
     const searchLower = searchTerm.toLowerCase();
     return (
       partner.name.toLowerCase().includes(searchLower) ||
-      (partner.description && partner.description.toLowerCase().includes(searchLower))
+      (partner.description && partner.description.toLowerCase().includes(searchLower)) ||
+      inferPartnerCategory(partner).toLowerCase().includes(searchLower)
     );
   });
+
+  const commissionPartners = partners.filter(
+    (partner) => Number(partner.commission_rate_percent || 0) > 0,
+  ).length;
+  const categories = new Set(partners.map(inferPartnerCategory)).size;
 
   return (
     <DashboardContainer user={user}>
@@ -54,8 +74,8 @@ export default function PartnersPage() {
       <div className="bg-white rounded-sm border border-gray-200 shadow-lg p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-black">Our Partners</h1>
-            <p className="text-gray-600 mt-1">Explore our valued partners and collaborators</p>
+            <h1 className="text-2xl font-bold text-black">Supplier Ecosystem</h1>
+            <p className="text-gray-600 mt-1">Partners, commissions and member value channels</p>
         </div>
 
           {/* Search and View Controls */}
@@ -103,20 +123,22 @@ export default function PartnersPage() {
         </div>
 
         {/* Stats */}
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-sm flex justify-between">
-          <div className="text-sm">
-            <span className="text-gray-600">Showing: </span>
-            <span className="text-black font-medium">{filteredPartners.length}</span>
-            <span className="text-gray-600"> partners</span>
-            {searchTerm && (
-              <span className="text-gray-600"> matching &quot;{searchTerm}&quot;</span>
-            )}
-          </div>
-          <div className="text-sm">
-            <span className="text-gray-600">Total: </span>
-            <span className="text-black font-medium">{partners.length}</span>
-            <span className="text-gray-600"> partners</span>
-          </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[
+            { label: 'Showing', value: filteredPartners.length },
+            { label: 'Total Partners', value: partners.length },
+            { label: 'Categories', value: categories },
+            { label: 'Commission Partners', value: commissionPartners },
+          ].map((item) => (
+            <div key={item.label} className="rounded-sm border border-gray-200 bg-gray-50 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">
+                {item.label}
+              </div>
+              <div className="mt-2 text-2xl font-black text-gray-950">
+                {item.value}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -170,6 +192,16 @@ export default function PartnersPage() {
                     </div>
                     
                       <h3 className="text-lg font-semibold text-black mb-2 line-clamp-1">{partner.name}</h3>
+                      <div className="mb-4 flex flex-wrap justify-center gap-2">
+                        <span className="rounded-sm bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
+                          {inferPartnerCategory(partner)}
+                        </span>
+                        {Number(partner.commission_rate_percent || 0) > 0 && (
+                          <span className="rounded-sm bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                            Commission {formatCommissionRate(partner.commission_rate_percent)}
+                          </span>
+                        )}
+                      </div>
                       {partner.description && (
                         <p className="text-gray-600 text-sm mb-4 line-clamp-3">{partner.description}</p>
                       )}
@@ -213,6 +245,16 @@ export default function PartnersPage() {
                       
                       <div className="flex-1">
                         <h3 className="text-xl font-semibold text-black mb-2">{partner.name}</h3>
+                        <div className="mb-4 flex flex-wrap gap-2">
+                          <span className="rounded-sm bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
+                            {inferPartnerCategory(partner)}
+                          </span>
+                          {Number(partner.commission_rate_percent || 0) > 0 && (
+                            <span className="rounded-sm bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                              Commission {formatCommissionRate(partner.commission_rate_percent)}
+                            </span>
+                          )}
+                        </div>
                         {partner.description && (
                           <p className="text-gray-600 mb-4">{partner.description}</p>
                         )}

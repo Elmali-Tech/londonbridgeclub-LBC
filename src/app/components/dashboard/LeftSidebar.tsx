@@ -69,6 +69,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
                 src={getAssetPublicUrl(user.profile_image_key)}
                 alt={user.full_name || 'User'}
                 fill
+                sizes="64px"
                 className="object-cover"
               />
             ) : (
@@ -118,6 +119,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
                         src={getAssetPublicUrl(birthdayUser.profile_image_key)}
                         alt={birthdayUser.full_name}
                         fill
+                        sizes="40px"
                         className="object-cover"
                       />
                     ) : (
@@ -173,6 +175,7 @@ export default function LeftSidebar({ user }: LeftSidebarProps) {
                           src={getAssetPublicUrl(recentUser.profile_image_key)}
                           alt={recentUser.full_name}
                           fill
+                          sizes="40px"
                           className="object-cover"
                         />
                       ) : (

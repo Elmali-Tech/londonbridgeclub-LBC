@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/lbc-data';
 import { storageBucketName } from '@/lib/storage';
-import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
+import { uploadBufferToAssetStorage } from '@/lib/storageUploadUtils';
 
 // POST API for creating a new post
 export async function POST(request: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload files to Supabase Storage if any
+    // Upload files to the configured asset storage if any.
     if (uploadedFiles.length > 0) {
       for (const file of uploadedFiles) {
         try {
@@ -59,19 +59,19 @@ export async function POST(request: NextRequest) {
           // Convert file to buffer
           const buffer = Buffer.from(await file.arrayBuffer());
 
-          const uploadResult = await uploadBufferToSupabaseStorage(
+          const uploadResult = await uploadBufferToAssetStorage(
             s3Key,
             buffer,
             file.type
           );
 
           if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'Supabase Storage upload failed');
+            throw new Error(uploadResult.error || 'Asset storage upload failed');
           }
 
           mediaKeys.push(s3Key);
         } catch (uploadError) {
-          console.error('Error uploading file to Supabase Storage:', uploadError);
+          console.error('Error uploading file to asset storage:', uploadError);
           return NextResponse.json(
             { success: false, error: 'Dosya yükleme başarısız oldu' },
             { status: 500 }
@@ -80,11 +80,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create Supabase client
-    const supabase = createClient();
+    // Create LbcData client
+    const lbcData = createClient();
 
     // Insert post into posts table
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await lbcData
       .from('posts')
       .insert({
         user_id: userId,
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      const { error: mediaError } = await supabase
+      const { error: mediaError } = await lbcData
         .from('post_media')
         .insert(mediaEntries);
 
