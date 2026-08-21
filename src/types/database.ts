@@ -160,6 +160,8 @@ export interface Partner {
   updated_at: string;
 }
 
+export type BenefitStatus = "draft" | "pending_review" | "revision_requested" | "published" | "archived";
+
 export interface Benefit {
   id: number;
   title: string;
@@ -174,6 +176,12 @@ export interface Benefit {
   terms_conditions?: string;
   is_active: boolean;
   premium?: boolean;
+  status: BenefitStatus;
+  submitted_by?: number | null;
+  submitted_at?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  revision_notes?: string | null;
   created_at: string;
   updated_at: string;
 }
