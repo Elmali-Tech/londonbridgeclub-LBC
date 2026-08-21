@@ -105,7 +105,7 @@ export default function CustomerDetailPage() {
       const data = await response.json();
       if (data.success) {
         const matches = (data.opportunities || []).filter(
-          (o: OpportunityRow) => o.company_name?.toLowerCase() === customer.company_name.toLowerCase()
+          (o: OpportunityRow) => o.company_name?.toLowerCase() === customer.company_name?.toLowerCase()
         );
         setRelatedOpportunities(matches);
       }
