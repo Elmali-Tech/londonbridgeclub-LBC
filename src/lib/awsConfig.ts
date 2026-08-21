@@ -31,6 +31,7 @@ export const FileSizeLimits = {
   POST_MEDIA: 50 * 1024 * 1024, // 50MB
   PARTNERS_LOGOS: 5 * 1024 * 1024, // 5MB
   BENEFITS_IMAGES: 5 * 1024 * 1024, // 5MB
+  PROPOSAL_DOCUMENTS: 10 * 1024 * 1024, // 10MB
 };
 
 // Allowed file types
@@ -40,6 +41,7 @@ export const AllowedFileTypes = {
   POST_MEDIA: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4'],
   PARTNERS_LOGOS: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
   BENEFITS_IMAGES: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
+  PROPOSAL_DOCUMENTS: ['application/pdf'],
 };
 
 // Get S3 public URL for an object
