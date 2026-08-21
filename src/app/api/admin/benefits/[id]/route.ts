@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireAdmin, requireRole } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (auth.response) return auth.response;
 
     const resolvedParams = await params;
+    const supabase = createClient();
     const { data: benefit, error } = await supabase
       .from('benefits')
       .select('*')
@@ -44,6 +45,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (auth.response) return auth.response;
 
     const resolvedParams = await params;
+    const supabase = createClient();
     // Get existing benefit data
     const { data: existingBenefit, error: fetchError } = await supabase
       .from('benefits')
@@ -143,6 +145,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (auth.response) return auth.response;
 
     const resolvedParams = await params;
+    const supabase = createClient();
     // Get benefit data to delete associated image
     const { data: benefit, error: fetchError } = await supabase
       .from('benefits')
