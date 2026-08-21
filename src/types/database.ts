@@ -150,17 +150,44 @@ export interface OpportunityInterest {
   created_at: string;
 }
 
+export type WorkflowStatus = "draft" | "pending_review" | "revision_requested" | "published" | "archived";
+
+export type PartnerCategory =
+  | "Loyalty"
+  | "Meal Cards"
+  | "Fuel"
+  | "Travel"
+  | "Insurance"
+  | "Technology"
+  | "Artificial Intelligence"
+  | "Digital Marketing"
+  | "PR"
+  | "Media"
+  | "Electricity"
+  | "Logistics"
+  | "Finance"
+  | "Healthcare";
+
 export interface Partner {
   id: number;
   name: string;
   description: string;
   logo_key?: string;
   website_url?: string;
+  category?: PartnerCategory | null;
+  subcategory?: string | null;
+  responsible_person?: number | null;
+  status: WorkflowStatus;
+  submitted_by?: number | null;
+  submitted_at?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  revision_notes?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type BenefitStatus = "draft" | "pending_review" | "revision_requested" | "published" | "archived";
+export type BenefitStatus = WorkflowStatus;
 
 export interface Benefit {
   id: number;
