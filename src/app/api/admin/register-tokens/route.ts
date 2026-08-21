@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { sendInvitationEmail } from '@/lib/nodemailer';
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const sessionToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-
-    if (!sessionToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const authUser = await validateToken(sessionToken);
-
-    if (!authUser || (!authUser.is_admin && authUser.role !== 'admin')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+    const authUser = auth.user;
 
     const body = await request.json();
     const { email, token: registerToken } = body;
@@ -93,18 +84,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const authUser = await validateToken(token);
-
-    if (!authUser || (!authUser.is_admin && authUser.role !== 'admin')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const { data, error } = await supabase
       .from('register_tokens')

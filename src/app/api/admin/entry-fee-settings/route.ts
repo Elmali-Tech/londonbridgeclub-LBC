@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
-  const user = await validateSession(req);
-  if (!user?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (auth.response) return auth.response;
 
   const supabase = createClient();
   const { data, error } = await supabase
@@ -20,10 +18,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const user = await validateSession(req);
-  if (!user?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (auth.response) return auth.response;
 
   const { is_active, threshold } = await req.json();
   const supabase = createClient();

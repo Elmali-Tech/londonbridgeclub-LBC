@@ -1,24 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const authUser = await validateToken(token);
-
-    if (!authUser || !authUser.is_admin) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     const id = parseInt(resolvedParams.id);
