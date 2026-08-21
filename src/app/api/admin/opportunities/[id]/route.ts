@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { validateSession } from "@/lib/auth";
+import { requireRole } from "@/lib/permissions";
 import { uploadBufferToSupabaseStorage } from "@/lib/storageUploadUtils";
 
 type OpportunityUpdateData = {
@@ -20,13 +20,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager"]);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     const id = resolvedParams.id;
@@ -138,13 +133,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const auth = await requireRole(request, ["admin", "opportunity_manager"]);
+    if (auth.response) return auth.response;
 
     const resolvedParams = await params;
     const id = resolvedParams.id;

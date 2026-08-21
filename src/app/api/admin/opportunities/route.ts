@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { validateSession } from '@/lib/auth';
+import { requireRole } from '@/lib/permissions';
 import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 interface Opportunity {
@@ -35,14 +35,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, opportunity: data });
     }
     if (includeInactive) {
-      const session = await validateSession(request);
-      const canManage =
-        session?.is_admin ||
-        session?.role === 'admin' ||
-        session?.role === 'opportunity_manager';
-      if (!canManage) {
-        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-      }
+      const auth = await requireRole(request, ['admin', 'opportunity_manager']);
+      if (auth.response) return auth.response;
     }
 
     let query = supabase
@@ -66,10 +60,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireRole(request, ['admin', 'opportunity_manager']);
+    if (auth.response) return auth.response;
 
     // Parse form data
     const formData = await request.formData();
