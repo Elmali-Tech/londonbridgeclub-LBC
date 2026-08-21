@@ -14,6 +14,7 @@ const validFileTypes: StorageFileType[] = [
   'POST_MEDIA',
   'PARTNERS_LOGOS',
   'BENEFITS_IMAGES',
+  'PROPOSAL_DOCUMENTS',
 ];
 
 const canAttemptLegacyS3Delete = () =>
