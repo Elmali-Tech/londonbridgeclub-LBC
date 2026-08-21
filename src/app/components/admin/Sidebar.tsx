@@ -114,6 +114,19 @@ const RemindersIcon = () => (
   </svg>
 );
 
+const ProjectsIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+  </svg>
+);
+
+const TasksIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+  </svg>
+);
+
 const TrackingIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2v20M2 12h20M5.07 19.07l13.86-13.86M19.07 19.07L5.07 5.07" />
@@ -269,6 +282,23 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           href: "/admin/documentation",
           icon: DocumentationIcon,
           roles: ["admin", "opportunity_manager", "sales_member", "viewer"],
+        },
+      ]
+    },
+    {
+      title: "Projects & Tasks",
+      items: [
+        {
+          name: "Projects",
+          href: "/admin/projects",
+          icon: ProjectsIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
+        },
+        {
+          name: "Tasks",
+          href: "/admin/tasks",
+          icon: TasksIcon,
+          roles: ["admin", "opportunity_manager", "sales_member"],
         },
       ]
     },
