@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateToken } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await validateToken(token);
-    if (!user || !user.is_admin) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+    const { user } = auth;
 
     const supabase = createClient();
 
@@ -71,15 +65,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await validateToken(token);
-    if (!user || !user.is_admin) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+    const { user } = auth;
 
     const body = await request.json();
     const { content, isPinned } = body;
