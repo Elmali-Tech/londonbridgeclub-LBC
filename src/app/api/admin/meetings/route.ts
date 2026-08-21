@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customer_id');
 
+    const supabase = createClient();
     let query = supabase.from('meetings').select('*').order('meeting_date', { ascending: false });
     if (customerId) {
       query = query.eq('customer_id', customerId);
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = createClient();
     const { data: meeting, error } = await supabase
       .from('meetings')
       .insert({
