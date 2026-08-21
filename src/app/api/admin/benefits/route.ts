@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { AllowedFileTypes } from '@/lib/awsConfig';
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const auth = await requireRole(request, ['admin', 'opportunity_manager']);
     if (auth.response) return auth.response;
 
+    const supabase = createClient();
     const { data: benefits, error } = await supabase
       .from('benefits')
       .select('*')
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert benefit into database
+    const supabase = createClient();
     const { data: benefit, error } = await supabase
       .from('benefits')
       .insert({
