@@ -247,6 +247,57 @@ export interface CustomerNote {
   created_at: string;
 }
 
+export type MeetingType = "In-Person" | "Call" | "Video Call";
+
+export interface Meeting {
+  id: number;
+  customer_id: number;
+  contact_id?: number | null;
+  customer_opportunity_id?: number | null;
+  title: string;
+  meeting_date: string;
+  meeting_time?: string | null;
+  meeting_type: MeetingType;
+  attendees?: string | null;
+  notes?: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProposalStatus = "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired";
+
+export interface Proposal {
+  id: number;
+  customer_id: number;
+  customer_opportunity_id?: number | null;
+  title: string;
+  description?: string | null;
+  amount?: string | null;
+  status: ProposalStatus;
+  sent_date?: string | null;
+  document_key?: string | null;
+  responsible_person?: number | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Reminder {
+  id: number;
+  title: string;
+  due_date: string;
+  customer_id?: number | null;
+  meeting_id?: number | null;
+  customer_opportunity_id?: number | null;
+  assigned_to?: number | null;
+  is_completed: boolean;
+  completed_at?: string | null;
+  notes?: string | null;
+  created_by?: number | null;
+  created_at: string;
+}
+
 export interface Session {
   id: number;
   user_id: number;
