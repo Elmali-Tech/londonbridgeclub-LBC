@@ -213,6 +213,40 @@ export interface Benefit {
   updated_at: string;
 }
 
+export interface Customer {
+  id: number;
+  company_name: string;
+  industry?: string | null;
+  website_url?: string | null;
+  address?: string | null;
+  solutions_used?: string | null;
+  responsible_person?: number | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerContact {
+  id: number;
+  customer_id: number;
+  full_name: string;
+  title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  is_primary: boolean;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerNote {
+  id: number;
+  customer_id: number;
+  note: string;
+  logged_by?: number | null;
+  created_at: string;
+}
+
 export interface Session {
   id: number;
   user_id: number;
