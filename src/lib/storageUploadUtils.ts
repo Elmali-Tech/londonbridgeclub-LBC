@@ -8,7 +8,8 @@ export type StorageFileType =
   | 'BANNER_IMAGE'
   | 'POST_MEDIA'
   | 'PARTNERS_LOGOS'
-  | 'BENEFITS_IMAGES';
+  | 'BENEFITS_IMAGES'
+  | 'PROPOSAL_DOCUMENTS';
 
 interface FileValidationResult {
   isValid: boolean;
@@ -21,6 +22,7 @@ const folderByFileType: Record<StorageFileType, string> = {
   POST_MEDIA: S3Folders.POST_MEDIA,
   PARTNERS_LOGOS: S3Folders.PARTNERS_LOGOS,
   BENEFITS_IMAGES: 'benefits',
+  PROPOSAL_DOCUMENTS: 'proposal-documents',
 };
 
 const getStorageClient = () => {
