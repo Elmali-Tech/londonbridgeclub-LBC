@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { validateSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/permissions';
 import { uploadBufferToSupabaseStorage } from '@/lib/storageUploadUtils';
 
 interface Event {
@@ -48,10 +48,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await validateSession(request);
-    if (!session || (session.role !== 'admin' && !session.is_admin)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     const formData = await request.formData();
     const title = formData.get('title') as string;
