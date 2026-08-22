@@ -147,7 +147,8 @@ export async function sendReviewDecisionEmail(
   email: string,
   name: string,
   decision: "approved" | "revision_requested",
-  notes?: string
+  notes?: string,
+  entityLabel: string = "benefit"
 ) {
   const isApproved = decision === "approved";
   const htmlBody = `
@@ -156,8 +157,8 @@ export async function sendReviewDecisionEmail(
       <p>Dear ${name},</p>
       <p>
         ${isApproved
-          ? "The benefit you submitted for review has been approved and is now live for members."
-          : "The benefit you submitted for review needs a revision before it can be published."}
+          ? `The ${entityLabel} you submitted for review has been approved and is now live.`
+          : `The ${entityLabel} you submitted for review needs a revision before it can be published.`}
       </p>
       ${notes ? `
       <div style="background-color: #f9f9f9; padding: 16px; border-radius: 8px; margin-top: 16px;">
@@ -177,7 +178,7 @@ export async function sendReviewDecisionEmail(
   await transporter.sendMail({
     from: '"LBC System" <muhammed@elmalitech.com>',
     to: email,
-    subject: isApproved ? "Your benefit submission was approved & published" : "Revision requested on your benefit submission",
+    subject: isApproved ? `Your ${entityLabel} submission was approved & published` : `Revision requested on your ${entityLabel} submission`,
     html: htmlBody,
   });
 }
