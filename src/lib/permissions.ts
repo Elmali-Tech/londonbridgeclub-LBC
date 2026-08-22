@@ -45,3 +45,24 @@ export async function requireRole(request: Request, allowed: UserRole[]): Promis
 export function requireAdmin(request: Request): Promise<AuthResult> {
   return requireRole(request, ['admin']);
 }
+
+/**
+ * True if the user can approve/publish content — either explicitly granted via the
+ * `can_publish` capability, or an admin (who always has it). Layered on top of `role`
+ * rather than a new role tier, so it can be granted per-user regardless of role.
+ */
+export function canPublish(user: RoleCheck & Pick<User, 'can_publish'> | null | undefined): boolean {
+  return !!user && (user.can_publish === true || isAdmin(user));
+}
+
+/** Require the caller to have the `can_publish` capability (or be an admin). */
+export async function requireCanPublish(request: Request): Promise<AuthResult> {
+  const user = await validateSession(request);
+  if (!user) {
+    return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  if (!canPublish(user)) {
+    return { response: NextResponse.json({ error: 'Publish permission required' }, { status: 403 }) };
+  }
+  return { user };
+}
