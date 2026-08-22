@@ -31,6 +31,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ success: false, error: 'No fields to update' }, { status: 400 });
     }
+    updates.updated_at = new Date().toISOString();
 
     const supabase = createClient();
     const { data: reminder, error } = await supabase
