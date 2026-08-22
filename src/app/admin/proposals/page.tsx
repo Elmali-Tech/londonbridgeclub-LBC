@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Customer, Proposal, ProposalStatus } from "@/types/database";
+import { Customer, Proposal, ProposalStatus, WorkflowStatus } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiFileText, FiPlus, FiEdit2, FiTrash2, FiPaperclip, FiDownload } from "react-icons/fi";
 import { getAssetPublicUrl } from "@/lib/storage";
@@ -35,6 +35,24 @@ const STATUS_BADGE: Record<ProposalStatus, string> = {
   Expired: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
+// Internal review gate (separate from the customer-facing status above) — a proposal
+// needs to be reviewed/published before it makes sense to send to a customer.
+const REVIEW_BADGE: Record<WorkflowStatus, string> = {
+  draft: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700",
+  pending_review: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800",
+  revision_requested: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800",
+  published: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800",
+  archived: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700",
+};
+
+const REVIEW_LABEL: Record<WorkflowStatus, string> = {
+  draft: "Draft",
+  pending_review: "Pending Review",
+  revision_requested: "Revision Requested",
+  published: "Approved",
+  archived: "Archived",
+};
+
 export default function ProposalsPage() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -46,6 +64,7 @@ export default function ProposalsPage() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [actioningId, setActioningId] = useState<number | null>(null);
 
   const { user, isLoading: isLoadingAuth } = useAuth();
   const router = useRouter();
@@ -53,6 +72,7 @@ export default function ProposalsPage() {
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager" || userRole === "sales_member";
   const isAdmin = userRole === "admin";
+  const canPublish = isAdmin || !!user?.can_publish;
 
   const authHeaders = () => {
     const token = localStorage.getItem("authToken");
@@ -198,6 +218,45 @@ export default function ProposalsPage() {
     }
   };
 
+  const runWorkflowAction = async (
+    proposalId: number,
+    action: "submit" | "approve" | "request-revision" | "archive",
+    body?: Record<string, unknown>
+  ) => {
+    try {
+      setActioningId(proposalId);
+      const response = await fetch(`/api/admin/proposals/${proposalId}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Action failed");
+
+      const messages: Record<typeof action, string> = {
+        submit: "Submitted for review",
+        approve: "Approved",
+        "request-revision": "Revision requested",
+        archive: "Proposal archived",
+      };
+      toast.success(messages[action]);
+      fetchProposals();
+    } catch (error: any) {
+      toast.error(error.message || "Action failed");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleSubmitForReview = (proposalId: number) => runWorkflowAction(proposalId, "submit");
+  const handleApprove = (proposalId: number) => runWorkflowAction(proposalId, "approve");
+  const handleRequestRevision = (proposalId: number) => {
+    const notes = window.prompt("What needs to change before this can be approved?");
+    if (!notes || !notes.trim()) return;
+    runWorkflowAction(proposalId, "request-revision", { notes: notes.trim() });
+  };
+  const handleArchive = (proposalId: number) => runWorkflowAction(proposalId, "archive");
+
   if (isLoadingAuth) {
     return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div></div>;
   }
@@ -295,13 +354,29 @@ export default function ProposalsPage() {
           {filteredProposals.map((proposal) => (
             <div key={proposal.id} className="p-5 flex items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-gray-900 dark:text-white text-sm">{proposal.title}</p>
                   <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${STATUS_BADGE[proposal.status]}`}>{proposal.status}</span>
+                  <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${REVIEW_BADGE[proposal.review_status]}`}>{REVIEW_LABEL[proposal.review_status]}</span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{getCustomerName(proposal.customer_id)}{proposal.amount ? ` • ${proposal.amount}` : ""}{proposal.sent_date ? ` • Sent ${proposal.sent_date}` : ""}</p>
+                {proposal.review_status === "revision_requested" && proposal.revision_notes && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1"><strong>Revision needed:</strong> {proposal.revision_notes}</p>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
+                {(proposal.review_status === "draft" || proposal.review_status === "revision_requested") && (
+                  <button onClick={() => handleSubmitForReview(proposal.id)} disabled={actioningId === proposal.id} className="px-3 py-1.5 text-xs font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition-colors disabled:opacity-50">Submit</button>
+                )}
+                {canPublish && proposal.review_status === "pending_review" && (
+                  <>
+                    <button onClick={() => handleApprove(proposal.id)} disabled={actioningId === proposal.id} className="px-3 py-1.5 text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-colors disabled:opacity-50">Approve</button>
+                    <button onClick={() => handleRequestRevision(proposal.id)} disabled={actioningId === proposal.id} className="px-3 py-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors disabled:opacity-50">Request Revision</button>
+                  </>
+                )}
+                {canPublish && proposal.review_status === "published" && (
+                  <button onClick={() => handleArchive(proposal.id)} disabled={actioningId === proposal.id} className="px-3 py-1.5 text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">Archive</button>
+                )}
                 {proposal.document_key && (
                   <a href={getAssetPublicUrl(proposal.document_key)} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors">
                     <FiDownload className="w-4 h-4" />
