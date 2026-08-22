@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Customer, CustomerContact, Meeting, MeetingType } from "@/types/database";
+import { Customer, CustomerContact, Meeting, MeetingNote, MeetingType } from "@/types/database";
 import { toast } from "react-hot-toast";
-import { FiCalendar, FiPlus, FiEdit2, FiTrash2, FiPhone, FiVideo, FiMapPin } from "react-icons/fi";
+import { FiCalendar, FiPlus, FiEdit2, FiTrash2, FiPhone, FiVideo, FiMapPin, FiMessageSquare } from "react-icons/fi";
 
 const emptyForm = {
   customer_id: "" as number | "",
@@ -34,6 +34,10 @@ export default function MeetingsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedNotesId, setExpandedNotesId] = useState<number | null>(null);
+  const [notesByMeeting, setNotesByMeeting] = useState<Record<number, MeetingNote[]>>({});
+  const [newNoteText, setNewNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   const { user, isLoading: isLoadingAuth } = useAuth();
   const router = useRouter();
@@ -85,6 +89,47 @@ export default function MeetingsPage() {
     } catch (error) {
       console.error("Error fetching contacts:", error);
       setContacts([]);
+    }
+  };
+
+  const fetchMeetingNotes = async (meetingId: number) => {
+    try {
+      const response = await fetch(`/api/admin/meetings/${meetingId}/notes`, { headers: authHeaders() });
+      const data = await response.json();
+      if (data.success) setNotesByMeeting((prev) => ({ ...prev, [meetingId]: data.notes || [] }));
+    } catch (error) {
+      console.error("Error fetching meeting notes:", error);
+    }
+  };
+
+  const toggleNotes = (meetingId: number) => {
+    if (expandedNotesId === meetingId) {
+      setExpandedNotesId(null);
+      return;
+    }
+    setExpandedNotesId(meetingId);
+    setNewNoteText("");
+    if (!notesByMeeting[meetingId]) fetchMeetingNotes(meetingId);
+  };
+
+  const handleAddNote = async (meetingId: number) => {
+    if (!newNoteText.trim()) return;
+    try {
+      setSavingNote(true);
+      const response = await fetch(`/api/admin/meetings/${meetingId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ note: newNoteText.trim() }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to add note");
+      setNotesByMeeting((prev) => ({ ...prev, [meetingId]: [data.note, ...(prev[meetingId] || [])] }));
+      setNewNoteText("");
+    } catch (error) {
+      console.error("Error adding meeting note:", error);
+      toast.error("Failed to add note");
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -273,21 +318,63 @@ export default function MeetingsPage() {
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
           {filteredMeetings.map((meeting) => (
-            <div key={meeting.id} className="p-5 flex items-center justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div className="w-11 h-11 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center flex-shrink-0">
-                  {TYPE_ICON[meeting.meeting_type]}
+            <div key={meeting.id}>
+              <div className="p-5 flex items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center flex-shrink-0">
+                    {TYPE_ICON[meeting.meeting_type]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900 dark:text-white text-sm">{meeting.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{getCustomerName(meeting.customer_id)} • {meeting.meeting_date}{meeting.meeting_time ? ` at ${meeting.meeting_time}` : ""}</p>
+                    {meeting.notes && <p className="text-xs text-gray-400 mt-1 line-clamp-1 max-w-md">{meeting.notes}</p>}
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-gray-900 dark:text-white text-sm">{meeting.title}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{getCustomerName(meeting.customer_id)} • {meeting.meeting_date}{meeting.meeting_time ? ` at ${meeting.meeting_time}` : ""}</p>
-                  {meeting.notes && <p className="text-xs text-gray-400 mt-1 line-clamp-1 max-w-md">{meeting.notes}</p>}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => toggleNotes(meeting.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      expandedNotesId === meeting.id ? "bg-teal-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    <FiMessageSquare className="w-3.5 h-3.5" /> Notes{notesByMeeting[meeting.id]?.length ? ` (${notesByMeeting[meeting.id].length})` : ""}
+                  </button>
+                  <button onClick={() => openModal(meeting)} className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors"><FiEdit2 className="w-4 h-4" /></button>
+                  {isAdmin && <button onClick={() => handleDelete(meeting.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>}
                 </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={() => openModal(meeting)} className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors"><FiEdit2 className="w-4 h-4" /></button>
-                {isAdmin && <button onClick={() => handleDelete(meeting.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>}
-              </div>
+              {expandedNotesId === meeting.id && (
+                <div className="px-5 pb-5 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-gray-800">
+                  <div className="pt-4 flex gap-2">
+                    <input
+                      value={newNoteText}
+                      onChange={(e) => setNewNoteText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddNote(meeting.id); }}
+                      placeholder="Log a note about this meeting..."
+                      className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                    />
+                    <button
+                      onClick={() => handleAddNote(meeting.id)}
+                      disabled={savingNote || !newNoteText.trim()}
+                      className="px-5 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 transition disabled:opacity-50"
+                    >
+                      {savingNote ? "Logging..." : "Log"}
+                    </button>
+                  </div>
+                  {(notesByMeeting[meeting.id] || []).length === 0 ? (
+                    <p className="text-xs text-gray-400 mt-3">No notes logged yet.</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {notesByMeeting[meeting.id].map((note) => (
+                        <div key={note.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-3">
+                          <p className="text-sm text-gray-700 dark:text-gray-300">{note.note}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">{new Date(note.created_at).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
