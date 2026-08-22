@@ -7,19 +7,30 @@ const VALID_ROLES: UserRole[] = ["admin", "opportunity_manager", "sales_member",
 
 type Params = { params: Promise<{ id: string }> };
 
-// PATCH - Admin changes a user's role
+// PATCH - Admin changes a user's role and/or can_publish capability
 export async function PATCH(request: NextRequest, { params }: Params) {
   const auth = await requireAdmin(request);
   if (auth.response) return auth.response;
 
   const { id } = await params;
-  const { role } = await request.json();
+  const { role, can_publish } = await request.json();
 
-  if (!VALID_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  const updates: Record<string, unknown> = {};
+  if (role !== undefined) {
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    updates.role = role;
+  }
+  if (can_publish !== undefined) {
+    updates.can_publish = !!can_publish;
   }
 
-  const { error } = await supabase.from("users").update({ role }).eq("id", id);
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "No changes provided" }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("users").update(updates).eq("id", id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

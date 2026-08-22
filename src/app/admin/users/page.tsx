@@ -114,7 +114,31 @@ export default function UsersPage() {
       toast.error("Failed to update user capabilities");
     }
   };
-  
+
+  const updateCanPublish = async (userId: number, canPublish: boolean) => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ can_publish: canPublish }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to update capability");
+
+      setUsers(
+        users.map((u) => (u.id === userId ? { ...u, can_publish: canPublish } : u)),
+      );
+      toast.success(canPublish ? "Can now approve/publish content" : "Publish capability removed");
+    } catch (err) {
+      toast.error("Failed to update user capabilities");
+    }
+  };
+
   const approveUser = async (userId: number) => {
     try {
       const token = localStorage.getItem("authToken");
@@ -515,6 +539,19 @@ export default function UsersPage() {
                     <span>Joined: {formatDate(user.created_at)}</span>
                   </div>
                   
+                  <div className="flex items-center justify-center">
+                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!user.can_publish}
+                        disabled={user.role === "admin"}
+                        onChange={(e) => updateCanPublish(user.id, e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-gray-300 text-rose-600 focus:ring-rose-600 disabled:opacity-50"
+                      />
+                      Can Publish{user.role === "admin" ? " (always)" : ""}
+                    </label>
+                  </div>
+
                   <div className="mt-4 pt-5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between w-full">
                     <select
                       value={user.role || "viewer"}
@@ -601,6 +638,16 @@ export default function UsersPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3">
+                          <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 cursor-pointer whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={!!user.can_publish}
+                              disabled={user.role === "admin"}
+                              onChange={(e) => updateCanPublish(user.id, e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-rose-600 focus:ring-rose-600 disabled:opacity-50"
+                            />
+                            Can Publish
+                          </label>
                           <select
                             value={user.role || "viewer"}
                             onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
