@@ -209,4 +209,116 @@ export async function sendSystemNotification(action: string, details: string) {
   }
 }
 
+interface DailyDigestItems {
+  overdueTasks: { title: string; due_date?: string | null }[];
+  tasksDueToday: { title: string }[];
+  overdueReminders: { title: string; due_date: string }[];
+  remindersDueToday: { title: string }[];
+  meetingsTomorrow: { title: string; meeting_time?: string | null }[];
+}
+
+const listItems = (items: string[]) =>
+  items.length ? `<ul style="margin: 4px 0 0; padding-left: 20px;">${items.map((i) => `<li>${i}</li>`).join('')}</ul>` : '';
+
+export async function sendDailyDigestEmail(email: string, name: string, items: DailyDigestItems) {
+  const sections = [
+    { label: 'Overdue Tasks', rows: items.overdueTasks.map((t) => `${t.title}${t.due_date ? ` (due ${t.due_date})` : ''}`) },
+    { label: 'Due Today', rows: items.tasksDueToday.map((t) => t.title) },
+    { label: 'Overdue Reminders', rows: items.overdueReminders.map((r) => `${r.title} (due ${r.due_date})`) },
+    { label: 'Reminders Due Today', rows: items.remindersDueToday.map((r) => r.title) },
+    { label: 'Meetings Tomorrow', rows: items.meetingsTomorrow.map((m) => `${m.title}${m.meeting_time ? ` at ${m.meeting_time}` : ''}`) },
+  ].filter((s) => s.rows.length > 0);
+
+  if (sections.length === 0) return;
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #000;">Your Daily Digest</h2>
+      <p>Dear ${name},</p>
+      <p>Here's what needs your attention today:</p>
+      ${sections
+        .map(
+          (s) => `
+        <div style="background-color: #f9f9f9; padding: 16px; border-radius: 8px; margin-top: 16px;">
+          <p style="margin: 0;"><strong>${s.label}</strong></p>
+          ${listItems(s.rows)}
+        </div>
+      `
+        )
+        .join('')}
+      <p style="margin-top: 24px;">Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: '"LBC System" <muhammed@elmalitech.com>',
+      to: email,
+      subject: 'Your Daily Digest — London Bridge Club',
+      html: htmlBody,
+    });
+  } catch (error) {
+    console.error('Failed to send daily digest email:', error);
+  }
+}
+
+interface WeeklyReportData {
+  period: 'week' | 'month';
+  pendingApprovals: number;
+  staleDraftProposals: { title: string }[];
+  missingDataOpportunities: { company_name: string; opportunity_title: string }[];
+  newOpportunitiesCount: number;
+  wonDeals: { company_name: string; opportunity_title: string }[];
+}
+
+export async function sendWeeklyReportEmail(email: string, name: string, data: WeeklyReportData) {
+  const periodLabel = data.period === 'month' ? 'Monthly' : 'Weekly';
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #000;">${periodLabel} Management Report</h2>
+      <p>Dear ${name},</p>
+      <div style="background-color: #f9f9f9; padding: 16px; border-radius: 8px; margin-top: 16px;">
+        <p style="margin: 0;"><strong>Pending Approvals:</strong> ${data.pendingApprovals}</p>
+        <p style="margin: 8px 0 0;"><strong>New Opportunities This ${periodLabel === 'Monthly' ? 'Month' : 'Week'}:</strong> ${data.newOpportunitiesCount}</p>
+      </div>
+      ${
+        data.wonDeals.length
+          ? `<div style="background-color: #f0fdf4; padding: 16px; border-radius: 8px; margin-top: 16px;">
+              <p style="margin: 0;"><strong>Won Deals</strong></p>
+              ${listItems(data.wonDeals.map((d) => `${d.opportunity_title} — ${d.company_name}`))}
+            </div>`
+          : ''
+      }
+      ${
+        data.staleDraftProposals.length
+          ? `<div style="background-color: #fffbeb; padding: 16px; border-radius: 8px; margin-top: 16px;">
+              <p style="margin: 0;"><strong>Proposals Stuck in Draft</strong></p>
+              ${listItems(data.staleDraftProposals.map((p) => p.title))}
+            </div>`
+          : ''
+      }
+      ${
+        data.missingDataOpportunities.length
+          ? `<div style="background-color: #fef2f2; padding: 16px; border-radius: 8px; margin-top: 16px;">
+              <p style="margin: 0;"><strong>Opportunities Missing Key Data</strong></p>
+              ${listItems(data.missingDataOpportunities.map((o) => `${o.opportunity_title} — ${o.company_name}`))}
+            </div>`
+          : ''
+      }
+      <p style="margin-top: 24px;">Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: '"LBC System" <muhammed@elmalitech.com>',
+      to: email,
+      subject: `${periodLabel} Management Report — London Bridge Club`,
+      html: htmlBody,
+    });
+  } catch (error) {
+    console.error('Failed to send weekly report email:', error);
+  }
+}
+
 export default transporter;
