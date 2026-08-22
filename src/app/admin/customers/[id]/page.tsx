@@ -6,8 +6,9 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Customer, CustomerContact, CustomerNote } from "@/types/database";
+import type { CatalogRecommendation } from "@/lib/gemini";
 import { toast } from "react-hot-toast";
-import { FiArrowLeft, FiBriefcase, FiEdit2, FiPlus, FiTrash2, FiUser, FiMessageSquare, FiBriefcase as FiOpportunity } from "react-icons/fi";
+import { FiArrowLeft, FiBriefcase, FiEdit2, FiPlus, FiTrash2, FiUser, FiMessageSquare, FiBriefcase as FiOpportunity, FiZap } from "react-icons/fi";
 
 type StaffOption = { id: number; full_name: string };
 type OpportunityRow = { id: number; opportunity_title: string; company_name: string; status: string; deal_stage?: string };
@@ -44,6 +45,10 @@ export default function CustomerDetailPage() {
 
   const [newNote, setNewNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  const [recommendations, setRecommendations] = useState<CatalogRecommendation[] | null>(null);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
 
   const authHeaders = () => {
     const token = localStorage.getItem("authToken");
@@ -234,6 +239,25 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleGenerateRecommendations = async () => {
+    try {
+      setLoadingRecommendations(true);
+      setRecommendationsError(null);
+      const response = await fetch(`/api/admin/customers/${customerId}/recommendations`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to generate recommendations");
+      setRecommendations(data.recommendations);
+    } catch (error) {
+      console.error("Error generating recommendations:", error);
+      setRecommendationsError(error instanceof Error ? error.message : "Failed to generate recommendations");
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-100px)]">
@@ -416,6 +440,47 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <FiZap className="text-teal-600" /> AI Recommendations
+          </h3>
+          <button
+            onClick={handleGenerateRecommendations}
+            disabled={loadingRecommendations}
+            className="px-4 py-2 text-xs font-bold bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50"
+          >
+            {loadingRecommendations ? "Generating..." : recommendations ? "Regenerate" : "Generate"}
+          </button>
+        </div>
+        <div className="p-6">
+          {recommendationsError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{recommendationsError}</p>
+          ) : recommendations === null ? (
+            <p className="text-sm text-gray-400">Suggest Benefits and Partners this customer is likely interested in, based on their profile.</p>
+          ) : recommendations.length === 0 ? (
+            <p className="text-sm text-gray-400">No recommendations available.</p>
+          ) : (
+            <div className="space-y-3">
+              {recommendations.map((rec, idx) => (
+                <div key={`${rec.type}-${rec.id}-${idx}`} className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={rec.type === "benefit" ? "/admin/benefits" : "/admin/partners"}
+                      className="font-bold text-gray-900 dark:text-white hover:text-teal-600 transition-colors"
+                    >
+                      {rec.name}
+                    </Link>
+                    <span className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400">{rec.type}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{rec.reason}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
