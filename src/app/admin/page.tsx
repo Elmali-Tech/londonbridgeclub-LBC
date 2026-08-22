@@ -8,7 +8,7 @@ import Card from "@/app/components/admin/Card";
 import DataTable from "@/app/components/admin/DataTable";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { User, CustomerOpportunity } from "@/types/database";
+import { User, CustomerOpportunity, Meeting, Task } from "@/types/database";
 
 // Modern Icon Set
 const UsersIcon = () => (
@@ -53,6 +53,56 @@ const PlusIcon = () => (
   </svg>
 );
 
+const BriefcaseIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  </svg>
+);
+
+const ClipboardCheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </svg>
+);
+
+const CoinsIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="8" r="6" />
+    <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+    <path d="M7 6h1v4" />
+  </svg>
+);
+
+const PercentIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="5" x2="5" y2="19" />
+    <circle cx="6.5" cy="6.5" r="2.5" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+  </svg>
+);
+
+const CalendarClockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <circle cx="18" cy="18" r="4" />
+    <path d="M18 16.5V18l1 1" />
+  </svg>
+);
+
+const AlertTriangleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
 export default function AdminDashboardPage() {
   const { user, isLoading: isLoadingAuth } = useAuth();
   const router = useRouter();
@@ -67,6 +117,14 @@ export default function AdminDashboardPage() {
   
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [recentOpportunities, setRecentOpportunities] = useState<CustomerOpportunity[]>([]);
+  const [summary, setSummary] = useState({
+    activeProjects: 0,
+    pendingApprovals: 0,
+    pipelineValue: 0,
+    winRatePercent: 0,
+    upcomingMeetings: [] as Meeting[],
+    overdueTasks: { count: 0, items: [] as Task[] },
+  });
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
@@ -116,6 +174,40 @@ export default function AdminDashboardPage() {
 
     fetchDashboardData();
   }, [hasAccess]);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+
+    const fetchSummary = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const response = await fetch("/api/admin/dashboard/summary", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (data.success) {
+          setSummary({
+            activeProjects: data.activeProjects,
+            pendingApprovals: data.pendingApprovals,
+            pipelineValue: data.pipelineValue,
+            winRatePercent: data.winRatePercent,
+            upcomingMeetings: data.upcomingMeetings,
+            overdueTasks: data.overdueTasks,
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard summary:", error);
+      }
+    };
+
+    fetchSummary();
+  }, [hasAccess]);
+
+  const formatCurrency = (value: number) => {
+    if (value >= 1_000_000) return `£${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `£${(value / 1_000).toFixed(0)}K`;
+    return `£${value}`;
+  };
 
   if (isLoadingAuth || stats.isLoading) {
     return (
@@ -251,6 +343,91 @@ export default function AdminDashboardPage() {
           color="amber"
           change={{ value: "Success", neutral: true }}
         />
+      </div>
+
+      {/* Management stats: Projects, Approvals, Pipeline, KPI */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+        <StatsCard
+          title="Active Projects"
+          value={summary.activeProjects}
+          icon={<BriefcaseIcon />}
+          color="blue"
+        />
+        <StatsCard
+          title="Pending Approvals"
+          value={summary.pendingApprovals}
+          icon={<ClipboardCheckIcon />}
+          color="amber"
+        />
+        <StatsCard
+          title="Pipeline Value (GBP)"
+          value={formatCurrency(summary.pipelineValue)}
+          icon={<CoinsIcon />}
+          color="green"
+        />
+        <StatsCard
+          title="Win Rate"
+          value={`${summary.winRatePercent}%`}
+          icon={<PercentIcon />}
+          color="indigo"
+        />
+      </div>
+
+      {/* Upcoming Meetings + Overdue Tasks */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card
+          title="Upcoming Meetings"
+          action={
+            <Link href="/admin/meetings" className="text-sm font-bold text-amber-600 hover:text-amber-700 transition-colors">
+              View all
+            </Link>
+          }
+        >
+          <div className="space-y-3">
+            {summary.upcomingMeetings.length > 0 ? summary.upcomingMeetings.map((meeting) => (
+              <div key={meeting.id} className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                  <CalendarClockIcon />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-white truncate">{meeting.title}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{meeting.meeting_date}{meeting.meeting_time ? ` at ${meeting.meeting_time}` : ""}</p>
+                </div>
+              </div>
+            )) : (
+              <div className="py-6 text-center">
+                <p className="text-gray-500 text-sm font-medium">No upcoming meetings.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card
+          title="Overdue Tasks"
+          action={
+            <Link href="/admin/tasks" className="text-sm font-bold text-amber-600 hover:text-amber-700 transition-colors">
+              View all ({summary.overdueTasks.count})
+            </Link>
+          }
+        >
+          <div className="space-y-3">
+            {summary.overdueTasks.items.length > 0 ? summary.overdueTasks.items.map((task) => (
+              <div key={task.id} className="flex items-center gap-3 p-4 bg-red-50/50 dark:bg-red-900/10 rounded-xl">
+                <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangleIcon />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-white truncate">{task.title}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400 font-semibold">Due {task.due_date}</p>
+                </div>
+              </div>
+            )) : (
+              <div className="py-6 text-center">
+                <p className="text-gray-500 text-sm font-medium">No overdue tasks. 🎉</p>
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
 
       {/* Main content area */}
