@@ -29,6 +29,15 @@ export interface User {
   is_admin: boolean;
   role: UserRole;
   can_create_opportunities?: boolean;
+  /** Capability layered on top of `role` — gates review-workflow approve/revision/archive actions. Admins always have it. */
+  can_publish?: boolean;
+}
+
+/** Shared audit-field convention every operational table follows. */
+export interface AuditFields {
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Membership Plan Types ────────────────────────────────────────
@@ -265,6 +274,14 @@ export interface Meeting {
   updated_at: string;
 }
 
+export interface MeetingNote {
+  id: number;
+  meeting_id: number;
+  note: string;
+  logged_by?: number | null;
+  created_at: string;
+}
+
 export type ProposalStatus = "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired";
 
 export interface Proposal {
@@ -278,6 +295,14 @@ export interface Proposal {
   sent_date?: string | null;
   document_key?: string | null;
   responsible_person?: number | null;
+  // Internal review gate, separate from the customer-facing `status` above — a proposal
+  // must be reviewed (published) before it makes sense to mark it Sent.
+  review_status: WorkflowStatus;
+  submitted_by?: number | null;
+  submitted_at?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  revision_notes?: string | null;
   created_by?: number | null;
   created_at: string;
   updated_at: string;
@@ -296,6 +321,7 @@ export interface Reminder {
   notes?: string | null;
   created_by?: number | null;
   created_at: string;
+  updated_at: string;
 }
 
 export type ProjectStatus = "Planning" | "Active" | "On Hold" | "Completed" | "Cancelled";
@@ -336,6 +362,7 @@ export interface Task {
   description?: string | null;
   project_id?: number | null;
   customer_id?: number | null;
+  customer_opportunity_id?: number | null;
   assigned_to?: number | null;
   due_date?: string | null;
   priority: TaskPriority;
