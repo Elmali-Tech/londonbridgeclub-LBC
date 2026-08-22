@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     if (auth.response) return auth.response;
 
     const body = await request.json();
-    const { title, description, project_id, customer_id, assigned_to, due_date, priority, status, recurrence } = body;
+    const { title, description, project_id, customer_id, customer_opportunity_id, assigned_to, due_date, priority, status, recurrence } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json({ success: false, error: 'Title is required' }, { status: 400 });
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         project_id: project_id || null,
         customer_id: customer_id || null,
+        customer_opportunity_id: customer_opportunity_id || null,
         assigned_to: assigned_to || null,
         due_date: due_date || null,
         priority: priority || 'Medium',

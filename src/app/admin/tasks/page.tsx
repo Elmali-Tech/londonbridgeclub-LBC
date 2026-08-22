@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Project, Task, TaskPriority, TaskRecurrence, TaskStatus } from "@/types/database";
+import { CustomerOpportunity, Project, Task, TaskPriority, TaskRecurrence, TaskStatus } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiCheckSquare, FiPlus, FiTrash2 } from "react-icons/fi";
 
@@ -15,6 +15,7 @@ const emptyForm = {
   title: "",
   description: "",
   project_id: "" as number | "",
+  customer_opportunity_id: "" as number | "",
   assigned_to: "" as number | "",
   due_date: "",
   priority: "Medium" as TaskPriority,
@@ -38,6 +39,7 @@ const PRIORITY_BADGE: Record<TaskPriority, string> = {
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [opportunities, setOpportunities] = useState<CustomerOpportunity[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,9 +102,20 @@ export default function TasksPage() {
     }
   }, []);
 
-  useEffect(() => { fetchTasks(); fetchProjects(); fetchStaff(); }, [fetchTasks, fetchProjects, fetchStaff]);
+  const fetchOpportunities = useCallback(async () => {
+    try {
+      const response = await fetch("/api/customer-opportunities", { headers: authHeaders() });
+      const data = await response.json();
+      if (data.success) setOpportunities(data.opportunities || []);
+    } catch (error) {
+      console.error("Error fetching opportunities:", error);
+    }
+  }, []);
+
+  useEffect(() => { fetchTasks(); fetchProjects(); fetchStaff(); fetchOpportunities(); }, [fetchTasks, fetchProjects, fetchStaff, fetchOpportunities]);
 
   const getProjectName = (id?: number | null) => projects.find((p) => p.id === id)?.name;
+  const getOpportunityTitle = (id?: number | null) => opportunities.find((o) => o.id === id)?.opportunity_title;
   const getStaffName = (id?: number | null) => staff.find((s) => s.id === id)?.full_name;
   const today = new Date().toISOString().slice(0, 10);
 
@@ -126,6 +139,7 @@ export default function TasksPage() {
         body: JSON.stringify({
           ...formData,
           project_id: formData.project_id || null,
+          customer_opportunity_id: formData.customer_opportunity_id || null,
           recurrence: formData.recurrence || null,
         }),
       });
@@ -228,6 +242,13 @@ export default function TasksPage() {
               </select>
             </div>
             <div className="space-y-1.5">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Linked Opportunity (optional)</label>
+              <select value={formData.customer_opportunity_id} onChange={(e) => setFormData((p) => ({ ...p, customer_opportunity_id: e.target.value ? Number(e.target.value) : "" }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
+                <option value="">None</option>
+                {opportunities.map((o) => <option key={o.id} value={o.id}>{o.opportunity_title} ({o.company_name})</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Assignee</label>
               <select value={formData.assigned_to} onChange={(e) => setFormData((p) => ({ ...p, assigned_to: e.target.value ? Number(e.target.value) : "" }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
                 <option value="">Unassigned</option>
@@ -288,6 +309,9 @@ export default function TasksPage() {
                     {task.due_date ? ` • Due ${task.due_date}${isOverdue ? " (Overdue)" : ""}` : ""}
                     {task.project_id && (
                       <> • <Link href={`/admin/projects/${task.project_id}`} className="text-teal-600 hover:underline">{getProjectName(task.project_id) || "Project"}</Link></>
+                    )}
+                    {task.customer_opportunity_id && (
+                      <> • {getOpportunityTitle(task.customer_opportunity_id) || "Opportunity"}</>
                     )}
                   </p>
                 </div>

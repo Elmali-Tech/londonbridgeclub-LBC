@@ -25,6 +25,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if ('description' in body) updates.description = body.description || null;
     if ('project_id' in body) updates.project_id = body.project_id || null;
     if ('customer_id' in body) updates.customer_id = body.customer_id || null;
+    if ('customer_opportunity_id' in body) updates.customer_opportunity_id = body.customer_opportunity_id || null;
     if ('assigned_to' in body) updates.assigned_to = body.assigned_to || null;
     if ('due_date' in body) updates.due_date = body.due_date || null;
     if ('priority' in body) updates.priority = body.priority;
