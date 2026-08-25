@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { validateSession } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import { SAFE_USER_SELECT, validateSession } from '@/lib/auth';
 import { User } from '@/types/database';
 
 export async function PUT(request: NextRequest) {
@@ -13,6 +13,7 @@ export async function PUT(request: NextRequest) {
 
     // Get the user ID from the session
     const userId = session.id;
+    const supabase = createClient();
 
     // Parse the request body
     const formData = await request.formData();
@@ -48,7 +49,7 @@ export async function PUT(request: NextRequest) {
       .from('users')
       .update(updateData)
       .eq('id', userId)
-      .select();
+      .select(SAFE_USER_SELECT);
 
     if (error) {
       console.error('Error updating user profile:', error);
@@ -69,4 +70,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

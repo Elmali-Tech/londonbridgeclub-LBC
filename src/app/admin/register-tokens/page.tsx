@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 import {
   FiGrid,
   FiList,
@@ -64,19 +63,7 @@ export default function RegisterTokensPage() {
       setIsLoading(true);
       setError(null);
 
-      const authToken = Cookies.get("authToken");
-
-      if (!authToken) {
-        setError("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-        setTokens([]);
-        return;
-      }
-
-      const response = await fetch("/api/admin/register-tokens", {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
+      const response = await fetch("/api/admin/register-tokens");
 
       const result = await response.json();
 
@@ -125,19 +112,11 @@ export default function RegisterTokensPage() {
       setSuccess(null);
 
       const token = generateToken();
-      const authToken = Cookies.get("authToken");
-
-      if (!authToken) {
-        setError("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-        setIsCreating(false);
-        return;
-      }
 
       const response = await fetch("/api/admin/register-tokens", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           email: newEmail,
@@ -171,18 +150,8 @@ export default function RegisterTokensPage() {
     }
 
     try {
-      const authToken = Cookies.get("authToken");
-
-      if (!authToken) {
-        setError("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-        return;
-      }
-
       const response = await fetch(`/api/admin/register-tokens/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
       });
 
       if (!response.ok) {

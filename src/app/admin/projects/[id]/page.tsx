@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { Customer, Project, ProjectStatus, ProjectTeamMember, Task, TaskPriority, TaskStatus } from "@/types/database";
+import { Customer, Project, ProjectStatus, ProjectTeamMember, Task, TaskPriority, TaskStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiArrowLeft, FiBriefcase, FiEdit2, FiPlus, FiTrash2, FiUsers, FiCheckSquare } from "react-icons/fi";
 
@@ -93,11 +92,18 @@ export default function ProjectDetailPage() {
 
   const fetchStaffAndCustomers = useCallback(async () => {
     try {
-      const [{ data: staffData }, customersRes] = await Promise.all([
-        supabase.from("users").select("id, full_name").in("role", ["admin", "opportunity_manager", "sales_member"]).order("full_name", { ascending: true }),
-        fetch("/api/admin/customers", { headers: authHeaders() }),
+      const [usersRes, customersRes] = await Promise.all([
+        fetch("/api/admin/users", { credentials: "same-origin" }),
+        fetch("/api/admin/customers", { credentials: "same-origin" }),
       ]);
-      if (staffData) setStaff(staffData);
+      if (!usersRes.ok) throw new Error("Failed to fetch staff");
+
+      const usersData = (await usersRes.json()) as { users?: User[] };
+      const staffData = (usersData.users || [])
+        .filter((member) => ["admin", "opportunity_manager", "sales_member"].includes(member.role))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .map(({ id, full_name }) => ({ id, full_name }));
+      setStaff(staffData);
       const customersData = await customersRes.json();
       if (customersData.success) setCustomers(customersData.customers || []);
     } catch (error) {

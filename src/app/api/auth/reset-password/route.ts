@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createClient } from "@/lib/supabase";
-import { hashPassword } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import {
+  hashPassword,
+  invalidateUserSessions,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type Body = {
   token?: string;
@@ -14,9 +21,13 @@ export async function POST(req: Request) {
     let token = (body?.token || "").toString();
     const newPassword = (body?.password || "").toString();
 
-    if (!token || !newPassword) {
+    if (
+      !token ||
+      newPassword.length < MIN_PASSWORD_LENGTH ||
+      newPassword.length > 1024
+    ) {
       return NextResponse.json(
-        { error: "Token ve şifre gereklidir" },
+        { error: `Token ve en az ${MIN_PASSWORD_LENGTH} karakterli şifre gereklidir` },
         { status: 400 }
       );
     }
@@ -61,25 +72,25 @@ export async function POST(req: Request) {
       .update(payload)
       .digest("hex");
 
-    // Compare signatures - both should be hex strings
-    // Normalize both to lowercase for comparison
     const normalizedReceived = signature.toLowerCase().trim();
     const normalizedExpected = expectedSig.toLowerCase().trim();
+    const signatureIsValid =
+      /^[a-f0-9]{64}$/.test(normalizedReceived) &&
+      crypto.timingSafeEqual(
+        Buffer.from(normalizedReceived, "hex"),
+        Buffer.from(normalizedExpected, "hex"),
+      );
 
-    if (normalizedReceived !== normalizedExpected) {
-      console.error("Signature mismatch:", {
-        received: normalizedReceived.substring(0, 20) + "...",
-        expected: normalizedExpected.substring(0, 20) + "...",
-      });
+    if (!signatureIsValid) {
       return NextResponse.json(
         { error: "Geçersiz token imzası" },
         { status: 400 }
       );
     }
 
-    const [email, expiresStr] = payload.split("|");
+    const [email, expiresStr, passwordVersion] = payload.split("|");
     const expires = Number(expiresStr || 0);
-    if (!email || !expires || Date.now() > expires) {
+    if (!email || !expires || !passwordVersion || Date.now() > expires) {
       return NextResponse.json(
         { error: "Token süresi dolmuş veya geçersiz" },
         { status: 400 }
@@ -92,14 +103,9 @@ export async function POST(req: Request) {
     // Find user record in custom users table
     const { data: users, error: userError } = await supabase
       .from("users")
-      .select("*")
+      .select("id, password_hash")
       .eq("email", email)
       .limit(1);
-
-    console.log("reset-password: users query", {
-      userError,
-      found: users?.length || 0,
-    });
 
     if (userError) {
       console.error("Error querying users table", userError);
@@ -111,17 +117,36 @@ export async function POST(req: Request) {
     }
 
     const user = users[0];
-    const passwordHash = hashPassword(newPassword);
+    const expectedPasswordVersion = crypto
+      .createHmac("sha256", secret)
+      .update(`password-version:${user.password_hash}`)
+      .digest("hex");
+    const passwordVersionIsValid =
+      /^[a-f0-9]{64}$/.test(passwordVersion) &&
+      crypto.timingSafeEqual(
+        Buffer.from(passwordVersion, "hex"),
+        Buffer.from(expectedPasswordVersion, "hex"),
+      );
 
-    const { error: updateError } = await supabase
+    if (!passwordVersionIsValid) {
+      return NextResponse.json(
+        { error: "Token daha önce kullanılmış veya geçersiz" },
+        { status: 400 },
+      );
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    const { data: updatedUser, error: updateError } = await supabase
       .from("users")
       .update({
         password_hash: passwordHash,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", user.id);
-
-    console.log("reset-password: updateError", updateError);
+      .eq("id", user.id)
+      .eq("password_hash", user.password_hash)
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       console.error("Error updating password in users table", updateError);
@@ -130,8 +155,19 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+    if (!updatedUser) {
+      return NextResponse.json(
+        { error: "Token daha önce kullanılmış veya geçersiz" },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
-    return NextResponse.json({ ok: true });
+    await invalidateUserSessions(user.id);
+
+    return NextResponse.json(
+      { ok: true },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (err) {
     console.error("Reset password error", err);
     return NextResponse.json(

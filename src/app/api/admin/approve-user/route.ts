@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // Kullanıcı bilgilerini al
     const { data: user, error: fetchError } = await supabase
       .from("users")
-      .select("*")
+      .select("email, full_name")
       .eq("id", userId)
       .single();
 

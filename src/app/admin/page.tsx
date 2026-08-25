@@ -141,30 +141,34 @@ export default function AdminDashboardPage() {
     const fetchDashboardData = async () => {
       try {
         const [
-          { count: usersCount },
+          usersResponse,
           { count: subsCount },
           { count: oppsCount },
           { count: wonCount },
-          { data: usersData },
           { data: oppsData },
         ] = await Promise.all([
-          supabase.from("users").select("*", { count: "exact", head: true }),
+          fetch("/api/admin/users", { credentials: "same-origin" }),
           supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
           supabase.from("customer_opportunities").select("*", { count: "exact", head: true }),
           supabase.from("customer_opportunities").select("*", { count: "exact", head: true }).eq("status", "Won"),
-          supabase.from("users").select("*").order("created_at", { ascending: false }).limit(6),
           supabase.from("customer_opportunities").select("*").order("created_at", { ascending: false }).limit(5),
         ]);
 
+        if (!usersResponse.ok) throw new Error("Failed to fetch users");
+        const usersPayload = (await usersResponse.json()) as { users?: User[] };
+        const usersData = [...(usersPayload.users || [])].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
         setStats({
-          usersCount: usersCount || 0,
+          usersCount: usersData.length,
           activeSubscriptions: subsCount || 0,
           totalOpportunities: oppsCount || 0,
           wonOpportunities: wonCount || 0,
           isLoading: false
         });
         
-        setRecentUsers(usersData || []);
+        setRecentUsers(usersData.slice(0, 6));
         setRecentOpportunities(oppsData || []);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
 import ImageEditModal from '@/app/components/profile/ImageEditModal';
 import { toast } from 'react-hot-toast';
 import { HiPencil } from 'react-icons/hi';
@@ -35,22 +34,33 @@ export default function ProfileTab() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showBannerModal, setShowBannerModal] = useState(false);
 
+  const persistProfileChanges = async (
+    changes: Record<string, string | null | undefined>,
+  ): Promise<UserProfileData> => {
+    const response = await fetch('/api/profile/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    const body = await response.json();
+    if (!response.ok || !body.user) {
+      throw new Error(body.error || 'Failed to update profile');
+    }
+    return body.user as UserProfileData;
+  };
+
   // Fetch user profile data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return;
       
       try {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (userError) throw userError;
-        
-        setProfileData(userData as UserProfileData);
-        setFormData(userData as UserProfileData);
+        const response = await fetch('/api/profile/me', { cache: 'no-store' });
+        const body = await response.json();
+        if (!response.ok || !body.user) throw new Error(body.error || 'Failed to fetch profile');
+
+        setProfileData(body.user as UserProfileData);
+        setFormData(body.user as UserProfileData);
       } catch (error) {
         console.error('Failed to fetch user data:', error);
       }
@@ -73,12 +83,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      await persistProfileChanges({ profile_image_key: key });
       
       setProfileData(prev => prev ? { ...prev, profile_image_key: key } : null);
       setFormData(prev => ({
@@ -98,12 +103,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      await persistProfileChanges({ profile_image_key: null });
       
       setProfileData(prev => prev ? { ...prev, profile_image_key: undefined } : null);
       setFormData(prev => ({
@@ -123,12 +123,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      await persistProfileChanges({ banner_image_key: key });
       
       setProfileData(prev => prev ? { ...prev, banner_image_key: key } : null);
       setFormData(prev => ({
@@ -148,12 +143,7 @@ export default function ProfileTab() {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      await persistProfileChanges({ banner_image_key: null });
       
       setProfileData(prev => prev ? { ...prev, banner_image_key: undefined } : null);
       setFormData(prev => ({
@@ -174,22 +164,17 @@ export default function ProfileTab() {
     
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: formData.full_name,
-          username: formData.username,
-          headline: formData.headline,
-          bio: formData.bio,
-          location: formData.location,
-          industry: formData.industry,
-          linkedin_url: formData.linkedin_url,
-          website_url: formData.website_url,
-          date_of_birth: formData.date_of_birth
-        })
-        .eq('id', user.id);
-      
-      if (error) throw error;
+      await persistProfileChanges({
+        full_name: formData.full_name,
+        username: formData.username,
+        headline: formData.headline,
+        bio: formData.bio,
+        location: formData.location,
+        industry: formData.industry,
+        linkedin_url: formData.linkedin_url,
+        website_url: formData.website_url,
+        date_of_birth: formData.date_of_birth,
+      });
       
       setProfileData(prev => ({
         ...prev!,

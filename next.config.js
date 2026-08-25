@@ -59,10 +59,6 @@ const nextConfig = {
   serverExternalPackages: ['@prisma/client'],
   // Sabit çıktı seçeneği
   poweredByHeader: false,
-  env: {
-    NEXT_PUBLIC_ADMIN_EMAIL: 'admin@example.com',
-    NEXT_PUBLIC_ADMIN_PASSWORD: 'admin123',
-  },
 };
 
 module.exports = nextConfig;

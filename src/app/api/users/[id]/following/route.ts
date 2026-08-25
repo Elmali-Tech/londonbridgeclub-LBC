@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
 ) {
   try {
-    // Auth token kontrolü
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: 'Yetkilendirme hatası' },
-        { status: 401 }
-      );
-    }
-
-    // Token doğrulama
-    const authenticatedUser = await validateToken(token);
+    // Oturum doğrulama
+    const authenticatedUser = await validateSession(request);
     if (!authenticatedUser) {
       return NextResponse.json(
         { success: false, error: 'Geçersiz veya süresi dolmuş token' },
@@ -96,4 +87,4 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}

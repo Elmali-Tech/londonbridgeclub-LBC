@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    // Auth token kontrolü
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: 'Yetkilendirme hatası' },
-        { status: 401 }
-      );
-    }
-
-    // Token doğrulama
-    const authenticatedUser = await validateToken(token);
+    // Oturum doğrulama
+    const authenticatedUser = await validateSession(request);
     if (!authenticatedUser) {
       return NextResponse.json(
         { success: false, error: 'Geçersiz veya süresi dolmuş token' },
@@ -40,15 +31,6 @@ export async function POST(
 
     // Supabase bağlantısı
     const supabase = createClient();
-
-    // İlk olarak kullanıcı bilgisini debug için getir
-    const { data: debugUserData, error: debugUserError } = await supabase
-      .from('users')
-      .select('*');
-    
-    if (debugUserError) {
-      console.error('Tüm kullanıcıları getirirken hata:', debugUserError);
-    }
 
     // Takip edilen kullanıcının var olup olmadığını kontrol et
     const { data: userExists, error: userError } = await supabase
@@ -118,4 +100,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

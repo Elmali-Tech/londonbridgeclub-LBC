@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { validateSession } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await validateSession(req);
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    const supabase = createClient();
+
     // Get users who joined in the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -18,21 +29,20 @@ export async function GET(req: NextRequest) {
       console.error('Error fetching recent users:', error);
       return NextResponse.json(
         { error: 'Failed to fetch recent users' },
-        { status: 500 }
+        { status: 500, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
-    return NextResponse.json({
-      users: users || [],
-      count: users?.length || 0
-    });
+    return NextResponse.json(
+      { users: users || [], count: users?.length || 0 },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
 
   } catch (error) {
     console.error('Error in recent users API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
-

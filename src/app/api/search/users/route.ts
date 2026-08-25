@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await validateToken(token);
+    const user = await validateSession(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
     }

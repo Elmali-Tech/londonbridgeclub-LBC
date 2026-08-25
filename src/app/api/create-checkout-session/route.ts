@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { stripe } from '@/lib/stripe';
+import { validateSession } from '@/lib/auth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    const authenticatedUser = await validateSession(req);
+    if (!authenticatedUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     if (!process.env.STRIPE_SECRET_KEY) {
       return NextResponse.json({ error: 'Stripe configuration error' }, { status: 500 });
     }
 
-    const { planId, billingCycle, userId } = await req.json();
+    const { planId, billingCycle } = await req.json();
+    const userId = authenticatedUser.id;
 
     if (!planId || !billingCycle) {
       return NextResponse.json({ error: 'planId and billingCycle are required' }, { status: 400 });

@@ -2,11 +2,10 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 
 export default function SecurityTab() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [saving, setSaving] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -16,15 +15,23 @@ export default function SecurityTab() {
   // Handle password change
   const handlePasswordChange = async () => {
     if (!user) return;
+    if (passwordData.newPassword.length < 12) {
+      toast.error('New password must be at least 12 characters');
+      return;
+    }
     
     setSaving(true);
     try {
-      // Update password in Supabase Auth
-      const { error } = await supabase.auth.updateUser({
-        password: passwordData.newPassword
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
       });
-      
-      if (error) throw error;
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Failed to update password');
       
       // Clear password fields
       setPasswordData({
@@ -32,10 +39,11 @@ export default function SecurityTab() {
         newPassword: ''
       });
       
-      toast.success('Password updated successfully');
+      toast.success('Password updated. Please sign in again.');
+      await logout();
     } catch (error) {
       console.error('Failed to update password:', error);
-      toast.error('Failed to update password');
+      toast.error(error instanceof Error ? error.message : 'Failed to update password');
     } finally {
       setSaving(false);
     }
@@ -70,10 +78,11 @@ export default function SecurityTab() {
               <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
               <input 
                 type="password"
+                minLength={12}
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                placeholder="Enter new password"
+                placeholder="Enter a new password (12+ characters)"
               />
             </div>
             <button 

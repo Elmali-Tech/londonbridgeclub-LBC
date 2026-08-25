@@ -1,5 +1,4 @@
 import { User } from '@/types/database';
-import { supabase } from './supabase';
 
 export type SubscriptionStatus = 'active' | 'inactive' | 'loading';
 
@@ -12,17 +11,10 @@ export const fetchSubscriptionStatus = async (userId: number): Promise<Subscript
   if (!userId) return 'inactive';
   
   try {
-    // Kullanıcının mevcut durumunu veritabanından al
-    const { data, error } = await supabase
-      .from('users')
-      .select('subscription_status')
-      .eq('id', userId)
-      .single();
-    
-    if (error) throw error;
-    
-    // Veritabanındaki subscription_status değerini kullan
-    return data?.subscription_status === 'active' ? 'active' : 'inactive';
+    const response = await fetch('/api/subscription/status', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Failed to fetch subscription status');
+    const data = await response.json();
+    return data.status === 'active' ? 'active' : 'inactive';
   } catch (error) {
     console.error('Failed to fetch subscription status:', error);
     return 'inactive'; // Hata durumunda default olarak inactive dön
@@ -38,26 +30,10 @@ export const fetchSubscriptionDetails = async (userId: number) => {
   if (!userId) return null;
   
   try {
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1);
-      
-    if (error) {
-      console.error('Failed to fetch subscription details:', error);
-      return null;
-    }
-    
-    // Eğer hiç subscription yoksa null dön
-    if (!data || data.length === 0) {
-      return null;
-    }
-    
-    // İlk (en yeni) subscription'ı dön
-    return data[0];
+    const response = await fetch('/api/subscription/status', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.subscription ?? null;
   } catch (error) {
     console.error('Failed to fetch subscription details:', error);
     return null;
@@ -96,19 +72,12 @@ export const hasAnySubscription = async (userId: number): Promise<boolean> => {
   if (!userId) return false;
 
   try {
-    const { count, error } = await supabase
-      .from('subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Failed to check subscription existence:', error);
-      return false;
-    }
-
-    return (count ?? 0) > 0;
+    const response = await fetch('/api/subscription/status', { cache: 'no-store' });
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.hasAnySubscription === true;
   } catch (error) {
     console.error('Failed to check subscription existence:', error);
     return false;
   }
-}; 
+};
