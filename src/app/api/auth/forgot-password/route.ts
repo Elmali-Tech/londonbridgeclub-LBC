@@ -40,7 +40,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const secret = process.env.RESET_PASSWORD_SECRET;
+    const secret =
+      process.env.LBC_RESET_PASSWORD_SECRET ||
+      process.env.RESET_PASSWORD_SECRET;
     if (!secret) {
       console.error("Missing RESET_PASSWORD_SECRET env var");
       return NextResponse.json(
