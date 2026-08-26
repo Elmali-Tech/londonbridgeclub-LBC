@@ -43,6 +43,9 @@ export default function AdminEventsPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [viewingRsvpsFor, setViewingRsvpsFor] = useState<Event | null>(null);
+  const [rsvps, setRsvps] = useState<Array<{ id: number; status: string; notes: string | null; users: { full_name: string; email: string } | null; created_at: string }>>([]);
+  const [loadingRsvps, setLoadingRsvps] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -154,6 +157,36 @@ export default function AdminEventsPage() {
       setImagePreview(null);
     }
     setShowCreateForm(true);
+  };
+
+  const handleViewRsvps = async (event: Event) => {
+    setViewingRsvpsFor(event);
+    setLoadingRsvps(true);
+    try {
+      const token = localStorage.getItem("authToken") || Cookies.get("authToken");
+      const res = await fetch(`/api/admin/events/${event.id}/rsvps`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setRsvps(data.rsvps || []);
+      else toast.error("Failed to load attendees");
+    } catch {
+      toast.error("Failed to load attendees");
+    } finally {
+      setLoadingRsvps(false);
+    }
+  };
+
+  const handleRemoveRsvp = async (rsvpId: number) => {
+    if (!confirm("Remove this attendee?")) return;
+    const token = localStorage.getItem("authToken") || Cookies.get("authToken");
+    const res = await fetch(`/api/admin/events/${viewingRsvpsFor?.id}/rsvps?rsvpId=${rsvpId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.success) setRsvps(rsvps.filter((r) => r.id !== rsvpId));
+    else toast.error("Failed to remove attendee");
   };
 
   const handleDelete = async (eventId: number) => {
@@ -439,6 +472,9 @@ export default function AdminEventsPage() {
                 <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-400">Fixed: {new Date(event.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                   <div className="flex gap-2">
+                    <button onClick={() => handleViewRsvps(event)} title="View Attendees" className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
+                      <FiCalendar className="w-4 h-4" />
+                    </button>
                     <button onClick={() => handleEdit(event)} className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
                       <FiEdit2 className="w-4 h-4" />
                     </button>
@@ -497,6 +533,9 @@ export default function AdminEventsPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => handleViewRsvps(event)} title="View Attendees" className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
+                          <FiCalendar className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleEdit(event)} className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
                           <FiEdit2 className="w-4 h-4" />
                         </button>
@@ -509,6 +548,57 @@ export default function AdminEventsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── RSVP Attendees Modal ── */}
+      {viewingRsvpsFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">Attendees</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{viewingRsvpsFor.title}</p>
+              </div>
+              <button onClick={() => setViewingRsvpsFor(null)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {loadingRsvps ? (
+                <div className="py-12 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" /></div>
+              ) : rsvps.length === 0 ? (
+                <div className="py-12 text-center text-gray-500 dark:text-gray-400">No RSVPs yet for this event.</div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {rsvps.map((rsvp) => (
+                    <div key={rsvp.id} className="px-6 py-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          {rsvp.users?.full_name?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm text-gray-900 dark:text-white">{rsvp.users?.full_name || "Unknown"}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{rsvp.users?.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${
+                          rsvp.status === "attending" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          : rsvp.status === "maybe" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }`}>{rsvp.status}</span>
+                        <button onClick={() => handleRemoveRsvp(rsvp.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                          <FiTrash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+              {rsvps.length} attendee{rsvps.length !== 1 ? "s" : ""} · {rsvps.filter((r) => r.status === "attending").length} attending · {rsvps.filter((r) => r.status === "maybe").length} maybe
+            </div>
           </div>
         </div>
       )}
