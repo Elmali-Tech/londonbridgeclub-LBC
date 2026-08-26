@@ -2,393 +2,729 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Customer, Project, ProjectStatus, ProjectTeamMember, Task, TaskPriority, TaskStatus } from "@/types/database";
+import { Project, ProjectKpi, ProjectStatus, Task, TaskPriority, TaskStatus } from "@/types/database";
 import { toast } from "react-hot-toast";
-import { FiArrowLeft, FiBriefcase, FiEdit2, FiPlus, FiTrash2, FiUsers, FiCheckSquare } from "react-icons/fi";
+import {
+  FiArrowLeft, FiEdit2, FiSave, FiX, FiPlus, FiTrash2,
+  FiUsers, FiCheckSquare, FiBarChart2, FiCalendar, FiInfo,
+} from "react-icons/fi";
 
+type Tab = "overview" | "timeline" | "tasks" | "kpis" | "team";
+type TeamMember = { id: number; user_id: number; full_name: string; added_at: string };
 type StaffOption = { id: number; full_name: string };
 
-const emptyTaskForm = {
-  title: "",
-  description: "",
-  assigned_to: "" as number | "",
-  due_date: "",
-  priority: "Medium" as TaskPriority,
+const STATUS_BADGE: Record<ProjectStatus, string> = {
+  Planning: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  Active: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  "On Hold": "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  Completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  Cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
+const PRIORITY_BADGE: Record<TaskPriority, string> = {
+  Low: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  Medium: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  High: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  Urgent: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+};
+
+const inputCls = "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
+const labelCls = "text-sm font-bold text-gray-700 dark:text-gray-300";
+
 export default function ProjectDetailPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const params = useParams();
-  const projectId = params.id as string;
+  const { user, isLoading: isLoadingAuth } = useAuth();
+
+  const [project, setProject] = useState<Project | null>(null);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [kpis, setKpis] = useState<ProjectKpi[]>([]);
+  const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [customerName, setCustomerName] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Project>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // KPI form
+  const [kpiForm, setKpiForm] = useState({ name: "", target: "", actual: "", unit: "" });
+  const [editingKpi, setEditingKpi] = useState<ProjectKpi | null>(null);
+  const [isSavingKpi, setIsSavingKpi] = useState(false);
+  const [showKpiForm, setShowKpiForm] = useState(false);
+
+  // Task form
+  const [taskForm, setTaskForm] = useState({ title: "", due_date: "", priority: "Medium" as TaskPriority, assigned_to: "" as number | "" });
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+
+  // Team
+  const [addingTeam, setAddingTeam] = useState(false);
+  const [selectedNewMember, setSelectedNewMember] = useState<number | "">("");
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager" || userRole === "sales_member";
+  const isAdmin = userRole === "admin";
+  const canEdit = userRole === "admin" || userRole === "opportunity_manager";
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [team, setTeam] = useState<ProjectTeamMember[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [staff, setStaff] = useState<StaffOption[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [projectForm, setProjectForm] = useState({
-    customer_id: "" as number | "", name: "", description: "", owner_id: "" as number | "",
-    status: "Planning" as ProjectStatus, progress_percentage: 0, start_date: "", end_date: "",
-    revenue: "", commission: "", risks: "",
-  });
-  const [savingProject, setSavingProject] = useState(false);
-
-  const [addingTeamId, setAddingTeamId] = useState<number | "">("");
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [taskForm, setTaskForm] = useState(emptyTaskForm);
-  const [savingTask, setSavingTask] = useState(false);
-
-  const authHeaders = () => {
+  const authHeaders = useCallback(() => {
     const token = localStorage.getItem("authToken");
     return { Authorization: `Bearer ${token}` };
-  };
-
-  useEffect(() => {
-    if (!authLoading && !hasAccess && user) router.push("/admin");
-  }, [hasAccess, authLoading, router, user]);
-
-  const fetchDetail = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/admin/projects/${projectId}`, { headers: authHeaders() });
-      const data = await response.json();
-      if (!data.success) {
-        toast.error(data.error || "Project not found");
-        router.push("/admin/projects");
-        return;
-      }
-      setProject(data.project);
-      setTeam(data.team || []);
-      setTasks(data.tasks || []);
-      setProjectForm({
-        customer_id: data.project.customer_id,
-        name: data.project.name,
-        description: data.project.description || "",
-        owner_id: data.project.owner_id || "",
-        status: data.project.status,
-        progress_percentage: data.project.progress_percentage,
-        start_date: data.project.start_date || "",
-        end_date: data.project.end_date || "",
-        revenue: data.project.revenue || "",
-        commission: data.project.commission || "",
-        risks: data.project.risks || "",
-      });
-    } catch (error) {
-      console.error("Error fetching project:", error);
-      toast.error("Failed to load project");
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, router]);
-
-  const fetchStaffAndCustomers = useCallback(async () => {
-    try {
-      const [{ data: staffData }, customersRes] = await Promise.all([
-        supabase.from("users").select("id, full_name").in("role", ["admin", "opportunity_manager", "sales_member"]).order("full_name", { ascending: true }),
-        fetch("/api/admin/customers", { headers: authHeaders() }),
-      ]);
-      if (staffData) setStaff(staffData);
-      const customersData = await customersRes.json();
-      if (customersData.success) setCustomers(customersData.customers || []);
-    } catch (error) {
-      console.error("Error fetching staff/customers:", error);
-    }
   }, []);
 
-  useEffect(() => { if (hasAccess) { fetchDetail(); fetchStaffAndCustomers(); } }, [hasAccess, fetchDetail, fetchStaffAndCustomers]);
-
-  const getStaffName = (id?: number | null) => staff.find((s) => s.id === id)?.full_name;
-  const getCustomerName = (id: number) => customers.find((c) => c.id === id)?.company_name;
-  const availableStaff = staff.filter((s) => !team.some((t) => t.user_id === s.id));
-
-  const handleSaveProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!projectForm.customer_id || !projectForm.name.trim()) {
-      toast.error("Customer and project name are required");
-      return;
-    }
+  const fetchAll = useCallback(async () => {
     try {
-      setSavingProject(true);
-      const response = await fetch(`/api/admin/projects/${projectId}`, {
+      setIsLoading(true);
+      const [projectRes, kpisRes] = await Promise.all([
+        fetch(`/api/admin/projects/${id}`, { headers: authHeaders() }),
+        fetch(`/api/admin/projects/${id}/kpis`, { headers: authHeaders() }),
+      ]);
+      const projectData = await projectRes.json();
+      const kpisData = await kpisRes.json();
+
+      if (!projectData.success) { toast.error("Project not found"); router.push("/admin/projects"); return; }
+
+      setProject(projectData.project);
+      setTeam(projectData.team || []);
+      setTasks(projectData.tasks || []);
+      setEditForm(projectData.project);
+      setKpis(kpisData.kpis || []);
+
+      // Fetch customer name
+      if (projectData.project.customer_id) {
+        const custRes = await fetch(`/api/admin/customers/${projectData.project.customer_id}`, { headers: authHeaders() });
+        const custData = await custRes.json();
+        if (custData.success) setCustomerName(custData.customer?.company_name || "");
+      }
+    } catch {
+      toast.error("Failed to load project");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, authHeaders, router]);
+
+  const fetchStaff = useCallback(async () => {
+    const { data } = await supabase
+      .from("users")
+      .select("id, full_name")
+      .in("role", ["admin", "opportunity_manager", "sales_member"])
+      .order("full_name");
+    if (data) setStaff(data);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoadingAuth && !hasAccess && user) router.push("/admin");
+  }, [hasAccess, isLoadingAuth, router, user]);
+
+  useEffect(() => { fetchAll(); fetchStaff(); }, [fetchAll, fetchStaff]);
+
+  // ── Save project edits ──
+  const handleSave = async () => {
+    if (!editForm.name?.trim() || !editForm.customer_id) { toast.error("Name and customer are required"); return; }
+    try {
+      setIsSaving(true);
+      const res = await fetch(`/api/admin/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(projectForm),
+        body: JSON.stringify(editForm),
       });
-      const data = await response.json();
+      const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setProject(data.project);
       setIsEditing(false);
-      toast.success("Project updated");
-    } catch (error) {
-      console.error("Error updating project:", error);
-      toast.error("Failed to update project");
-    } finally {
-      setSavingProject(false);
-    }
+      toast.success("Project saved");
+    } catch { toast.error("Failed to save"); }
+    finally { setIsSaving(false); }
   };
 
-  const handleAddTeamMember = async () => {
-    if (!addingTeamId) return;
-    try {
-      const response = await fetch(`/api/admin/projects/${projectId}/team`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ user_id: addingTeamId }),
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      setTeam([...team, data.member]);
-      setAddingTeamId("");
-      toast.success("Team member added");
-    } catch (error) {
-      console.error("Error adding team member:", error);
-      toast.error("Failed to add team member");
-    }
-  };
-
-  const handleRemoveTeamMember = async (userId: number) => {
-    try {
-      const response = await fetch(`/api/admin/projects/${projectId}/team/${userId}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      setTeam(team.filter((t) => t.user_id !== userId));
-      toast.success("Team member removed");
-    } catch (error) {
-      console.error("Error removing team member:", error);
-      toast.error("Failed to remove team member");
-    }
-  };
-
-  const handleAddTask = async (e: React.FormEvent) => {
+  // ── KPI handlers ──
+  const handleKpiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskForm.title.trim()) {
-      toast.error("Task title is required");
-      return;
-    }
+    if (!kpiForm.name.trim()) { toast.error("Name is required"); return; }
     try {
-      setSavingTask(true);
-      const response = await fetch("/api/admin/tasks", {
+      setIsSavingKpi(true);
+      if (editingKpi) {
+        const res = await fetch(`/api/admin/projects/${id}/kpis/${editingKpi.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify(kpiForm),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        setKpis(kpis.map((k) => (k.id === editingKpi.id ? data.kpi : k)));
+      } else {
+        const res = await fetch(`/api/admin/projects/${id}/kpis`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify(kpiForm),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        setKpis([...kpis, data.kpi]);
+      }
+      setKpiForm({ name: "", target: "", actual: "", unit: "" });
+      setEditingKpi(null);
+      setShowKpiForm(false);
+      toast.success(editingKpi ? "KPI updated" : "KPI added");
+    } catch { toast.error("Failed to save KPI"); }
+    finally { setIsSavingKpi(false); }
+  };
+
+  const handleKpiDelete = async (kpiId: number) => {
+    if (!confirm("Delete this KPI?")) return;
+    const res = await fetch(`/api/admin/projects/${id}/kpis/${kpiId}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json();
+    if (data.success) { setKpis(kpis.filter((k) => k.id !== kpiId)); toast.success("KPI deleted"); }
+    else toast.error("Failed to delete KPI");
+  };
+
+  // ── Task handlers ──
+  const handleTaskSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskForm.title.trim()) { toast.error("Title is required"); return; }
+    try {
+      setIsSavingTask(true);
+      const res = await fetch("/api/admin/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ ...taskForm, project_id: Number(projectId) }),
+        body: JSON.stringify({
+          title: taskForm.title,
+          due_date: taskForm.due_date || null,
+          priority: taskForm.priority,
+          assigned_to: taskForm.assigned_to || null,
+          project_id: Number(id),
+        }),
       });
-      const data = await response.json();
+      const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setTasks([...tasks, data.task]);
-      setIsTaskModalOpen(false);
-      setTaskForm(emptyTaskForm);
+      setTaskForm({ title: "", due_date: "", priority: "Medium", assigned_to: "" });
+      setShowTaskForm(false);
       toast.success("Task added");
-    } catch (error) {
-      console.error("Error adding task:", error);
-      toast.error("Failed to add task");
-    } finally {
-      setSavingTask(false);
-    }
+    } catch { toast.error("Failed to add task"); }
+    finally { setIsSavingTask(false); }
   };
 
-  const handleTaskStatusChange = async (taskId: number, status: TaskStatus) => {
-    try {
-      const response = await fetch(`/api/admin/tasks/${taskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ status }),
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      setTasks(tasks.map((t) => (t.id === taskId ? data.task : t)));
-    } catch (error) {
-      console.error("Error updating task:", error);
-      toast.error("Failed to update task");
-    }
+  const handleTaskStatusChange = async (task: Task, status: TaskStatus) => {
+    const res = await fetch(`/api/admin/tasks/${task.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (data.success) setTasks(tasks.map((t) => (t.id === task.id ? data.task : t)));
+    else toast.error("Failed to update task");
   };
 
-  const handleDeleteTask = async (taskId: number) => {
+  const handleTaskDelete = async (taskId: number) => {
     if (!confirm("Delete this task?")) return;
-    try {
-      const response = await fetch(`/api/admin/tasks/${taskId}`, { method: "DELETE", headers: authHeaders() });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      setTasks(tasks.filter((t) => t.id !== taskId));
-      toast.success("Task deleted");
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      toast.error("Failed to delete task");
-    }
+    const res = await fetch(`/api/admin/tasks/${taskId}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json();
+    if (data.success) setTasks(tasks.filter((t) => t.id !== taskId));
+    else toast.error("Failed to delete task");
   };
 
-  if (authLoading || loading) {
+  // ── Team handlers ──
+  const handleAddTeamMember = async () => {
+    if (!selectedNewMember) return;
+    const res = await fetch(`/api/admin/projects/${id}/team`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ user_id: selectedNewMember }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const member = staff.find((s) => s.id === selectedNewMember);
+      if (member) setTeam([...team, { id: data.id, user_id: member.id, full_name: member.full_name, added_at: new Date().toISOString() }]);
+      setSelectedNewMember("");
+      setAddingTeam(false);
+      toast.success("Member added");
+    } else toast.error(data.error || "Failed to add member");
+  };
+
+  const handleRemoveTeamMember = async (member: TeamMember) => {
+    if (!confirm("Remove this team member?")) return;
+    // Route deletes by user_id: DELETE /api/admin/projects/[id]/team/[userId]
+    const res = await fetch(`/api/admin/projects/${id}/team/${member.user_id}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json();
+    if (data.success) setTeam(team.filter((m) => m.id !== member.id));
+    else toast.error("Failed to remove member");
+  };
+
+  // ── Timeline helpers ──
+  const getTimelinePercent = () => {
+    if (!project?.start_date || !project?.end_date) return null;
+    const start = new Date(project.start_date).getTime();
+    const end = new Date(project.end_date).getTime();
+    const now = Date.now();
+    if (end <= start) return null;
+    const pct = Math.min(100, Math.max(0, Math.round(((now - start) / (end - start)) * 100)));
+    return pct;
+  };
+
+  const formatDate = (d?: string | null) =>
+    d ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(d)) : "—";
+
+  const getStaffName = (uid?: number | null) => staff.find((s) => s.id === uid)?.full_name;
+
+  if (isLoadingAuth || isLoading) {
     return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div></div>;
   }
   if (!hasAccess || !project) return null;
-  const isAdmin = userRole === "admin";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const timelinePercent = getTimelinePercent();
+  const availableToAdd = staff.filter((s) => !team.some((m) => m.user_id === s.id));
+
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "overview", label: "Overview", icon: <FiInfo /> },
+    { key: "timeline", label: "Timeline", icon: <FiCalendar /> },
+    { key: "tasks", label: `Tasks (${tasks.length})`, icon: <FiCheckSquare /> },
+    { key: "kpis", label: `KPIs (${kpis.length})`, icon: <FiBarChart2 /> },
+    { key: "team", label: `Team (${team.length})`, icon: <FiUsers /> },
+  ];
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 animate-in fade-in duration-500 text-gray-900 dark:text-gray-100 min-h-screen">
-      <Link href="/admin/projects" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-teal-600 transition-colors mb-6">
-        <FiArrowLeft /> Back to Projects
-      </Link>
 
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden mb-8">
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><FiBriefcase className="text-teal-600" /> Project Overview</h3>
-          {!isEditing && <button onClick={() => setIsEditing(true)} className="p-2 text-gray-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors"><FiEdit2 className="w-4 h-4" /></button>}
+      {/* Back + Header */}
+      <div className="mb-6">
+        <Link href="/admin/projects" className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-teal-600 transition-colors mb-4">
+          <FiArrowLeft className="w-4 h-4" /> All Projects
+        </Link>
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap mb-1">
+              <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg ${STATUS_BADGE[project.status]}`}>{project.status}</span>
+              {project.start_date && project.end_date && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(project.start_date)} → {formatDate(project.end_date)}</span>
+              )}
+            </div>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{project.name}</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">{customerName}</p>
+          </div>
+          {canEdit && !isEditing && (
+            <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <FiEdit2 className="w-4 h-4" /> Edit
+            </button>
+          )}
         </div>
 
-        {isEditing ? (
-          <form onSubmit={handleSaveProject} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Project Name</label>
-              <input value={projectForm.name} onChange={(e) => setProjectForm((p) => ({ ...p, name: e.target.value }))} required className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Owner</label>
-              <select value={projectForm.owner_id} onChange={(e) => setProjectForm((p) => ({ ...p, owner_id: e.target.value ? Number(e.target.value) : "" }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
-                <option value="">Unassigned</option>
-                {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Status</label>
-              <select value={projectForm.status} onChange={(e) => setProjectForm((p) => ({ ...p, status: e.target.value as ProjectStatus }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
-                {(["Planning", "Active", "On Hold", "Completed", "Cancelled"] as ProjectStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Start Date</label>
-              <input type="date" value={projectForm.start_date} onChange={(e) => setProjectForm((p) => ({ ...p, start_date: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">End Date</label>
-              <input type="date" value={projectForm.end_date} onChange={(e) => setProjectForm((p) => ({ ...p, end_date: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Revenue</label>
-              <input value={projectForm.revenue} onChange={(e) => setProjectForm((p) => ({ ...p, revenue: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Commission</label>
-              <input value={projectForm.commission} onChange={(e) => setProjectForm((p) => ({ ...p, commission: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Progress: {projectForm.progress_percentage}%</label>
-              <input type="range" min={0} max={100} value={projectForm.progress_percentage} onChange={(e) => setProjectForm((p) => ({ ...p, progress_percentage: Number(e.target.value) }))} className="w-full accent-teal-600" />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Description</label>
-              <textarea value={projectForm.description} onChange={(e) => setProjectForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Risks</label>
-              <textarea value={projectForm.risks} onChange={(e) => setProjectForm((p) => ({ ...p, risks: e.target.value }))} rows={2} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            </div>
-            <div className="flex items-center gap-3 md:col-span-2 pt-4 border-t border-gray-100 dark:border-gray-800">
-              <button type="submit" disabled={savingProject} className="px-6 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 transition disabled:opacity-50">{savingProject ? "Saving..." : "Save Changes"}</button>
-              <button type="button" onClick={() => setIsEditing(false)} disabled={savingProject} className="px-6 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition">Cancel</button>
-            </div>
-          </form>
-        ) : (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white md:col-span-2">{project.name}</h2>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Customer</p><p className="text-sm text-gray-700 dark:text-gray-300">{getCustomerName(project.customer_id) || "—"}</p></div>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Owner</p><p className="text-sm text-gray-700 dark:text-gray-300">{getStaffName(project.owner_id) || "Unassigned"}</p></div>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Status</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.status}</p></div>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Timeline</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.start_date || "TBD"} → {project.end_date || "TBD"}</p></div>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Revenue</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.revenue || "—"}</p></div>
-            <div><p className="text-xs font-bold text-gray-400 uppercase">Commission</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.commission || "—"}</p></div>
-            <div className="md:col-span-2">
-              <p className="text-xs font-bold text-gray-400 uppercase mb-1">Progress</p>
-              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2"><div className="bg-teal-600 h-2 rounded-full" style={{ width: `${project.progress_percentage}%` }} /></div>
-              <p className="text-xs text-gray-400 mt-1">{project.progress_percentage}%</p>
-            </div>
-            {project.description && <div className="md:col-span-2"><p className="text-xs font-bold text-gray-400 uppercase">Description</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.description}</p></div>}
-            {project.risks && <div className="md:col-span-2"><p className="text-xs font-bold text-gray-400 uppercase">Risks</p><p className="text-sm text-gray-700 dark:text-gray-300">{project.risks}</p></div>}
+        {/* Progress bar */}
+        <div className="mt-4">
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+            <span>Progress</span>
+            <span className="font-bold">{project.progress_percentage}%</span>
           </div>
-        )}
+          <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+            <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${project.progress_percentage}%` }} />
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden mb-8">
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><FiUsers className="text-teal-600" /> Team</h3>
-        </div>
-        <div className="p-6 flex flex-wrap gap-2 items-center border-b border-gray-100 dark:border-gray-800">
-          <select value={addingTeamId} onChange={(e) => setAddingTeamId(e.target.value ? Number(e.target.value) : "")} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
-            <option value="">Add team member...</option>
-            {availableStaff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-          </select>
-          <button onClick={handleAddTeamMember} disabled={!addingTeamId} className="px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 transition disabled:opacity-50">Add</button>
-        </div>
-        {team.length === 0 ? (
-          <p className="p-6 text-sm text-gray-400 text-center">No team members yet.</p>
-        ) : (
-          <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {team.map((member) => (
-              <div key={member.id} className="p-4 px-6 flex items-center justify-between">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">{getStaffName(member.user_id) || `User #${member.user_id}`}</p>
-                <button onClick={() => handleRemoveTeamMember(member.user_id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>
+      {/* Tabs */}
+      <div className="mb-6 flex flex-wrap gap-1.5 border-b border-gray-100 dark:border-gray-800 pb-0">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold rounded-t-lg border-b-2 transition-all -mb-px ${
+              activeTab === tab.key
+                ? "border-teal-600 text-teal-600 dark:text-teal-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW TAB ── */}
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          {isEditing ? (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
+                <h3 className="text-lg font-bold">Edit Project</h3>
+                <button onClick={() => { setIsEditing(false); setEditForm(project); }} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"><FiX /></button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><FiCheckSquare className="text-teal-600" /> Tasks</h3>
-          <button onClick={() => setIsTaskModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"><FiPlus className="w-3.5 h-3.5" /> Add Task</button>
-        </div>
-
-        {isTaskModalOpen && (
-          <form onSubmit={handleAddTask} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/20">
-            <input placeholder="Task title" value={taskForm.title} onChange={(e) => setTaskForm((p) => ({ ...p, title: e.target.value }))} required className="md:col-span-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            <select value={taskForm.assigned_to} onChange={(e) => setTaskForm((p) => ({ ...p, assigned_to: e.target.value ? Number(e.target.value) : "" }))} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
-              <option value="">Unassigned</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-            </select>
-            <input type="date" value={taskForm.due_date} onChange={(e) => setTaskForm((p) => ({ ...p, due_date: e.target.value }))} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
-            <select value={taskForm.priority} onChange={(e) => setTaskForm((p) => ({ ...p, priority: e.target.value as TaskPriority }))} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
-              {(["Low", "Medium", "High", "Urgent"] as TaskPriority[]).map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <div className="flex items-center gap-3 md:col-span-2">
-              <button type="submit" disabled={savingTask} className="px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 transition disabled:opacity-50">{savingTask ? "Saving..." : "Add Task"}</button>
-              <button type="button" onClick={() => { setIsTaskModalOpen(false); setTaskForm(emptyTaskForm); }} className="px-5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition">Cancel</button>
-            </div>
-          </form>
-        )}
-
-        {tasks.length === 0 ? (
-          <p className="p-6 text-sm text-gray-400 text-center">No tasks yet.</p>
-        ) : (
-          <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {tasks.map((task) => (
-              <div key={task.id} className="p-4 px-6 flex items-center justify-between gap-4">
-                <div>
-                  <p className={`font-bold text-sm ${task.status === "Done" ? "text-gray-400 line-through" : "text-gray-900 dark:text-white"}`}>{task.title}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{getStaffName(task.assigned_to) || "Unassigned"}{task.due_date ? ` • Due ${task.due_date}` : ""} • {task.priority}</p>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className={labelCls}>Project Name</label>
+                  <input value={editForm.name || ""} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className={inputCls} />
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <select value={task.status} onChange={(e) => handleTaskStatusChange(task.id, e.target.value as TaskStatus)} className="text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 outline-none focus:ring-2 focus:ring-teal-500/20 text-gray-700 dark:text-gray-300">
-                    {(["To Do", "In Progress", "Done"] as TaskStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Status</label>
+                  <select value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as ProjectStatus }))} className={inputCls}>
+                    {(["Planning", "Active", "On Hold", "Completed", "Cancelled"] as ProjectStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  {isAdmin && <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Owner</label>
+                  <select value={editForm.owner_id ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, owner_id: e.target.value ? Number(e.target.value) : null }))} className={inputCls}>
+                    <option value="">Unassigned</option>
+                    {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Start Date</label>
+                  <input type="date" value={editForm.start_date || ""} onChange={(e) => setEditForm((p) => ({ ...p, start_date: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>End Date</label>
+                  <input type="date" value={editForm.end_date || ""} onChange={(e) => setEditForm((p) => ({ ...p, end_date: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Revenue</label>
+                  <input value={editForm.revenue || ""} onChange={(e) => setEditForm((p) => ({ ...p, revenue: e.target.value }))} placeholder="e.g. £50,000" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Commission</label>
+                  <input value={editForm.commission || ""} onChange={(e) => setEditForm((p) => ({ ...p, commission: e.target.value }))} placeholder="e.g. £5,000" className={inputCls} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className={labelCls}>Progress: {editForm.progress_percentage ?? 0}%</label>
+                  <input type="range" min={0} max={100} value={editForm.progress_percentage ?? 0} onChange={(e) => setEditForm((p) => ({ ...p, progress_percentage: Number(e.target.value) }))} className="w-full accent-teal-600" />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className={labelCls}>Description</label>
+                  <textarea value={editForm.description || ""} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} rows={3} className={inputCls} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className={labelCls}>Risks</label>
+                  <textarea value={editForm.risks || ""} onChange={(e) => setEditForm((p) => ({ ...p, risks: e.target.value }))} rows={2} className={inputCls} />
+                </div>
+                <div className="flex gap-3 md:col-span-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <button onClick={handleSave} disabled={isSaving} className="inline-flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 transition disabled:opacity-50">
+                    <FiSave /> {isSaving ? "Saving…" : "Save"}
+                  </button>
+                  <button onClick={() => { setIsEditing(false); setEditForm(project); }} className="px-6 py-2.5 border border-gray-200 dark:border-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition">Cancel</button>
                 </div>
               </div>
-            ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Details</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Owner</span><span className="font-semibold">{getStaffName(project.owner_id) || "Unassigned"}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Start</span><span className="font-semibold">{formatDate(project.start_date)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">End</span><span className="font-semibold">{formatDate(project.end_date)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Revenue</span><span className="font-semibold text-green-600 dark:text-green-400">{project.revenue || "—"}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Commission</span><span className="font-semibold text-teal-600 dark:text-teal-400">{project.commission || "—"}</span></div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {project.description && (
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Description</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{project.description}</p>
+                  </div>
+                )}
+                {project.risks && (
+                  <div className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30 p-6">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-3">Risks</h3>
+                    <p className="text-sm text-amber-800 dark:text-amber-300 whitespace-pre-wrap leading-relaxed">{project.risks}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TIMELINE TAB ── */}
+      {activeTab === "timeline" && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6">
+          <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-6">Project Timeline</h3>
+          {!project.start_date || !project.end_date ? (
+            <div className="py-16 text-center">
+              <FiCalendar className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-700 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400 font-medium">No start or end date set.</p>
+              {canEdit && <button onClick={() => setActiveTab("overview")} className="mt-3 text-sm text-teal-600 hover:underline">Edit project to add dates →</button>}
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="flex justify-between text-sm font-bold text-gray-700 dark:text-gray-300">
+                <span>{formatDate(project.start_date)}</span>
+                <span>{formatDate(project.end_date)}</span>
+              </div>
+              {/* Track */}
+              <div className="relative">
+                <div className="h-8 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${project.status === "Completed" ? "bg-green-500" : project.status === "Cancelled" ? "bg-red-400" : project.status === "On Hold" ? "bg-amber-400" : "bg-teal-500"}`}
+                    style={{ width: `${project.progress_percentage}%` }}
+                  />
+                </div>
+                {/* Today marker */}
+                {timelinePercent !== null && timelinePercent >= 0 && timelinePercent <= 100 && (
+                  <div className="absolute top-0 h-full" style={{ left: `${timelinePercent}%` }}>
+                    <div className="w-0.5 h-8 bg-gray-900 dark:bg-white opacity-60" />
+                    <div className="absolute top-9 left-1/2 -translate-x-1/2 text-[10px] font-black text-gray-600 dark:text-gray-400 whitespace-nowrap">Today</div>
+                  </div>
+                )}
+              </div>
+              {/* Stats row */}
+              <div className="grid grid-cols-3 gap-4 mt-8">
+                {[
+                  { label: "Duration", val: (() => { const s = new Date(project.start_date!); const e = new Date(project.end_date!); const days = Math.round((e.getTime() - s.getTime()) / 86400000); return `${days} days`; })() },
+                  { label: "Progress", val: `${project.progress_percentage}%` },
+                  { label: "Time Elapsed", val: timelinePercent !== null ? `${timelinePercent}%` : "—" },
+                ].map((s) => (
+                  <div key={s.label} className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                    <p className="text-2xl font-black text-gray-900 dark:text-white">{s.val}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Tasks on timeline */}
+              {tasks.filter((t) => t.due_date).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Task Due Dates</h4>
+                  <div className="space-y-2">
+                    {tasks.filter((t) => t.due_date).sort((a, b) => (a.due_date! > b.due_date! ? 1 : -1)).map((t) => {
+                      const start = new Date(project.start_date!).getTime();
+                      const end = new Date(project.end_date!).getTime();
+                      const due = new Date(t.due_date!).getTime();
+                      const pct = end > start ? Math.min(100, Math.max(0, Math.round(((due - start) / (end - start)) * 100))) : 0;
+                      const isOverdue = t.status !== "Done" && t.due_date! < today;
+                      return (
+                        <div key={t.id} className="flex items-center gap-3">
+                          <div className="w-36 text-xs text-right text-gray-500 dark:text-gray-400 shrink-0">{t.due_date}</div>
+                          <div className="flex-1 relative h-5">
+                            <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900 shadow"
+                              style={{ left: `calc(${pct}% - 6px)`, backgroundColor: t.status === "Done" ? "#10b981" : isOverdue ? "#ef4444" : "#6366f1" }} />
+                          </div>
+                          <div className={`text-xs font-semibold truncate max-w-[180px] ${isOverdue ? "text-red-600" : "text-gray-700 dark:text-gray-300"}`}>{t.title}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TASKS TAB ── */}
+      {activeTab === "tasks" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Project Tasks</h3>
+            <button onClick={() => setShowTaskForm(!showTaskForm)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors">
+              <FiPlus /> Add Task
+            </button>
           </div>
-        )}
-      </div>
+
+          {showTaskForm && (
+            <form onSubmit={handleTaskSubmit} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className={labelCls}>Title</label>
+                <input value={taskForm.title} onChange={(e) => setTaskForm((p) => ({ ...p, title: e.target.value }))} required className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Due Date</label>
+                <input type="date" value={taskForm.due_date} onChange={(e) => setTaskForm((p) => ({ ...p, due_date: e.target.value }))} className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Priority</label>
+                <select value={taskForm.priority} onChange={(e) => setTaskForm((p) => ({ ...p, priority: e.target.value as TaskPriority }))} className={inputCls}>
+                  {(["Low", "Medium", "High", "Urgent"] as TaskPriority[]).map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className={labelCls}>Assignee</label>
+                <select value={taskForm.assigned_to} onChange={(e) => setTaskForm((p) => ({ ...p, assigned_to: e.target.value ? Number(e.target.value) : "" }))} className={inputCls}>
+                  <option value="">Unassigned</option>
+                  {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-3 md:col-span-2">
+                <button type="submit" disabled={isSavingTask} className="px-5 py-2 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">{isSavingTask ? "Adding…" : "Add Task"}</button>
+                <button type="button" onClick={() => setShowTaskForm(false)} className="px-5 py-2 border border-gray-200 dark:border-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {tasks.length === 0 && !showTaskForm ? (
+            <div className="py-16 text-center bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+              <FiCheckSquare className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-700 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No tasks yet.</p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
+              {tasks.map((task) => {
+                const isOverdue = task.status !== "Done" && !!task.due_date && task.due_date < today;
+                return (
+                  <div key={task.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className={`font-bold text-sm ${task.status === "Done" ? "text-gray-400 line-through" : "text-gray-900 dark:text-white"}`}>{task.title}</p>
+                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg ${PRIORITY_BADGE[task.priority]}`}>{task.priority}</span>
+                      </div>
+                      <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-600 font-bold" : "text-gray-500 dark:text-gray-400"}`}>
+                        {getStaffName(task.assigned_to) || "Unassigned"}
+                        {task.due_date ? ` • Due ${task.due_date}${isOverdue ? " (Overdue)" : ""}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select value={task.status} onChange={(e) => handleTaskStatusChange(task, e.target.value as TaskStatus)} className="text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 outline-none text-gray-700 dark:text-gray-300">
+                        {(["To Do", "In Progress", "Done"] as TaskStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      {isAdmin && <button onClick={() => handleTaskDelete(task.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><FiTrash2 className="w-4 h-4" /></button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── KPIs TAB ── */}
+      {activeTab === "kpis" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Key Performance Indicators</h3>
+            {canEdit && <button onClick={() => { setShowKpiForm(!showKpiForm); setEditingKpi(null); setKpiForm({ name: "", target: "", actual: "", unit: "" }); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors"><FiPlus /> Add KPI</button>}
+          </div>
+
+          {(showKpiForm || editingKpi) && (
+            <form onSubmit={handleKpiSubmit} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-1.5 col-span-2 md:col-span-4">
+                <label className={labelCls}>KPI Name</label>
+                <input value={kpiForm.name} onChange={(e) => setKpiForm((p) => ({ ...p, name: e.target.value }))} required placeholder="e.g. Customer Satisfaction Score" className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Target</label>
+                <input value={kpiForm.target} onChange={(e) => setKpiForm((p) => ({ ...p, target: e.target.value }))} placeholder="e.g. 90" className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Actual</label>
+                <input value={kpiForm.actual} onChange={(e) => setKpiForm((p) => ({ ...p, actual: e.target.value }))} placeholder="e.g. 85" className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Unit</label>
+                <input value={kpiForm.unit} onChange={(e) => setKpiForm((p) => ({ ...p, unit: e.target.value }))} placeholder="e.g. %, £, count" className={inputCls} />
+              </div>
+              <div className="flex gap-2 items-end">
+                <button type="submit" disabled={isSavingKpi} className="flex-1 py-3 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">{isSavingKpi ? "Saving…" : editingKpi ? "Update" : "Add"}</button>
+                <button type="button" onClick={() => { setShowKpiForm(false); setEditingKpi(null); }} className="flex-1 py-3 border border-gray-200 dark:border-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {kpis.length === 0 && !showKpiForm ? (
+            <div className="py-16 text-center bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+              <FiBarChart2 className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-700 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No KPIs defined yet.</p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30">
+                    <th className="text-left px-5 py-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">KPI</th>
+                    <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Target</th>
+                    <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Actual</th>
+                    <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Unit</th>
+                    <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
+                    {canEdit && <th className="px-4 py-3" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {kpis.map((kpi) => {
+                    const target = parseFloat(kpi.target || "");
+                    const actual = parseFloat(kpi.actual || "");
+                    const achieved = !isNaN(target) && !isNaN(actual) && target > 0;
+                    const pct = achieved ? Math.round((actual / target) * 100) : null;
+                    return (
+                      <tr key={kpi.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                        <td className="px-5 py-4 font-semibold text-gray-900 dark:text-white">{kpi.name}</td>
+                        <td className="px-4 py-4 text-center text-gray-600 dark:text-gray-400 font-variant-numeric tabular-nums">{kpi.target || "—"}</td>
+                        <td className="px-4 py-4 text-center font-bold font-variant-numeric tabular-nums">{kpi.actual || "—"}</td>
+                        <td className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">{kpi.unit || "—"}</td>
+                        <td className="px-4 py-4 text-center">
+                          {pct !== null ? (
+                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${pct >= 100 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : pct >= 75 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>
+                              {pct}%
+                            </span>
+                          ) : "—"}
+                        </td>
+                        {canEdit && (
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button onClick={() => { setEditingKpi(kpi); setKpiForm({ name: kpi.name, target: kpi.target || "", actual: kpi.actual || "", unit: kpi.unit || "" }); setShowKpiForm(false); }} className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg"><FiEdit2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleKpiDelete(kpi.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><FiTrash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TEAM TAB ── */}
+      {activeTab === "team" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Team Members</h3>
+            {canEdit && availableToAdd.length > 0 && (
+              <button onClick={() => setAddingTeam(!addingTeam)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors"><FiPlus /> Add Member</button>
+            )}
+          </div>
+
+          {addingTeam && (
+            <div className="flex gap-3">
+              <select value={selectedNewMember} onChange={(e) => setSelectedNewMember(e.target.value ? Number(e.target.value) : "")} className={`flex-1 ${inputCls}`}>
+                <option value="">Select a staff member…</option>
+                {availableToAdd.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+              </select>
+              <button onClick={handleAddTeamMember} disabled={!selectedNewMember} className="px-5 py-2 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">Add</button>
+              <button onClick={() => { setAddingTeam(false); setSelectedNewMember(""); }} className="px-5 py-2 border border-gray-200 dark:border-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+            </div>
+          )}
+
+          {team.length === 0 ? (
+            <div className="py-16 text-center bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+              <FiUsers className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-700 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No team members yet.</p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
+              {team.map((member) => (
+                <div key={member.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-sm">
+                      {member.full_name?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">{member.full_name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Added {formatDate(member.added_at)}</p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <button onClick={() => handleRemoveTeamMember(member)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
