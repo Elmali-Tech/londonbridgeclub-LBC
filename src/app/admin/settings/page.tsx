@@ -5,17 +5,18 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { toast } from "react-hot-toast";
-import { 
-  FiUser, 
-  FiSettings, 
-  FiMail, 
-  FiBell, 
-  FiLock, 
-  FiImage, 
+import {
+  FiUser,
+  FiSettings,
+  FiMail,
+  FiBell,
+  FiLock,
+  FiImage,
   FiGlobe,
   FiSave,
   FiCheckCircle,
-  FiShield
+  FiShield,
+  FiDollarSign
 } from "react-icons/fi";
 
 export default function SettingsPage() {
@@ -54,7 +55,42 @@ export default function SettingsPage() {
   const [subscriptionNotifications, setSubscriptionNotifications] =
     useState(true);
 
-  const [activeTab, setActiveTab] = useState<"profile" | "site" | "email" | "notifications">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "site" | "email" | "notifications" | "entryfee">("profile");
+
+  // Entry-fee settings
+  const [entryFeeActive, setEntryFeeActive] = useState(false);
+  const [entryFeeThreshold, setEntryFeeThreshold] = useState(50);
+  const [loadingEntryFee, setLoadingEntryFee] = useState(false);
+  const [savingEntryFee, setSavingEntryFee] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    setLoadingEntryFee(true);
+    fetch("/api/admin/entry-fee-settings", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { setEntryFeeActive(d.is_active ?? false); setEntryFeeThreshold(d.threshold ?? 50); })
+      .catch(() => {})
+      .finally(() => setLoadingEntryFee(false));
+  }, []);
+
+  const handleSaveEntryFee = async () => {
+    setSavingEntryFee(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch("/api/admin/entry-fee-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ is_active: entryFeeActive, threshold: entryFeeThreshold }),
+      });
+      if (res.ok) toast.success("Entry fee settings saved");
+      else toast.error("Failed to save entry fee settings");
+    } catch {
+      toast.error("Failed to save entry fee settings");
+    } finally {
+      setSavingEntryFee(false);
+    }
+  };
 
   // Handle form submissions
   const handleSave = (section: string) => {
@@ -119,12 +155,22 @@ export default function SettingsPage() {
               <button
                 onClick={() => setActiveTab("notifications")}
                 className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all ${
-                  activeTab === "notifications" 
-                    ? "bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-white" 
+                  activeTab === "notifications"
+                    ? "bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-white"
                     : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/30"
                 }`}
               >
                 <FiBell className={activeTab === "notifications" ? "text-slate-600" : ""} /> Notifications
+              </button>
+              <button
+                onClick={() => setActiveTab("entryfee")}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all ${
+                  activeTab === "entryfee"
+                    ? "bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-white"
+                    : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                }`}
+              >
+                <FiDollarSign className={activeTab === "entryfee" ? "text-slate-600" : ""} /> Entry Fees
               </button>
             </nav>
 
@@ -405,6 +451,66 @@ export default function SettingsPage() {
                       <FiSave /> Push Changes
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Entry Fee Tab */}
+              {activeTab === "entryfee" && (
+                <div className="p-8 animate-in slide-in-from-right-2 duration-300">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600">
+                      <FiDollarSign size={32} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Entry Fee Settings</h2>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Control automatic entry-fee charging based on active member count.</p>
+                    </div>
+                  </div>
+
+                  {loadingEntryFee ? (
+                    <div className="py-12 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600" /></div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                        <div>
+                          <p className="text-sm font-bold text-gray-900 dark:text-white">Enable Entry Fee</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Charge a joining fee when active member count exceeds the threshold.</p>
+                        </div>
+                        <button
+                          onClick={() => setEntryFeeActive(!entryFeeActive)}
+                          className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${entryFeeActive ? "bg-slate-900 dark:bg-slate-600" : "bg-gray-300 dark:bg-gray-700"}`}
+                        >
+                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${entryFeeActive ? "left-7" : "left-1"}`} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 ml-1">
+                          Member Count Threshold
+                        </label>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 ml-1 mb-2">Entry fee activates once active members exceed this number.</p>
+                        <input
+                          type="number"
+                          min={1}
+                          value={entryFeeThreshold}
+                          onChange={(e) => setEntryFeeThreshold(Number(e.target.value))}
+                          disabled={!entryFeeActive}
+                          className="w-40 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-500 transition-all font-bold text-lg disabled:opacity-40"
+                        />
+                      </div>
+
+                      <div className="pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSaveEntryFee}
+                          disabled={savingEntryFee}
+                          className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <FiSave /> {savingEntryFee ? "Saving…" : "Save Entry Fee Settings"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
