@@ -315,8 +315,10 @@ export default function TasksPage() {
         const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
         const monthLabel = calendarDate.toLocaleString("en-GB", { month: "long", year: "numeric" });
         const todayStr = new Date().toISOString().slice(0, 10);
-        const cells = Array.from({ length: firstDay === 0 ? 6 : firstDay - 1 }, () => null)
-          .concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+        const cells: (number | null)[] = [
+          ...Array.from({ length: firstDay === 0 ? 6 : firstDay - 1 }, (): null => null),
+          ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+        ];
         // Pad to full weeks
         while (cells.length % 7 !== 0) cells.push(null);
 
