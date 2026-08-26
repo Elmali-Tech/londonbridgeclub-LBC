@@ -373,6 +373,31 @@ export interface Task {
   updated_at: string;
 }
 
+export interface ProjectKpi {
+  id: number;
+  project_id: number;
+  name: string;
+  target?: string | null;
+  actual?: string | null;
+  unit?: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RsvpStatus = 'attending' | 'maybe' | 'declined';
+
+export interface EventRsvp {
+  id: number;
+  event_id: number;
+  user_id: number;
+  status: RsvpStatus;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  users?: { full_name: string; email: string };
+}
+
 export interface Session {
   id: number;
   user_id: number;
