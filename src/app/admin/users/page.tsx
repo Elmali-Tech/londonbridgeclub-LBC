@@ -250,6 +250,16 @@ export default function UsersPage() {
     }
   };
 
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      admin: "Admin",
+      opportunity_manager: "Opp Manager",
+      sales_member: "Data Entry",
+      viewer: "Viewer",
+    };
+    return labels[role] || role;
+  };
+
   const getRoleBadge = (role: string) => {
     const styles = {
       admin: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800",
@@ -525,7 +535,7 @@ export default function UsersPage() {
                   
                   <h3 className="text-xl font-black text-gray-900 dark:text-white px-4 leading-tight group-hover:text-rose-600 transition-colors">{user.full_name || "Unregistered Identifier"}</h3>
                   <span className={`mt-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shadow-sm ${getRoleBadge(user.role || "viewer")}`}>
-                    {user.role || "viewer"}
+                    {getRoleLabel(user.role || "viewer")}
                   </span>
                 </div>
 
@@ -623,7 +633,7 @@ export default function UsersPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg ${getRoleBadge(user.role || "viewer")}`}>
-                          {user.role || "viewer"}
+                          {getRoleLabel(user.role || "viewer")}
                         </span>
                         {!user.is_approved && (
                           <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
