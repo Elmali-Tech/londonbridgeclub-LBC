@@ -321,4 +321,142 @@ export async function sendWeeklyReportEmail(email: string, name: string, data: W
   }
 }
 
+interface OpportunitySuggestion {
+  customer_id: number;
+  company_name: string;
+  suggestions: { type: string; id: number; name: string; reason: string }[];
+}
+
+export async function sendOpportunitySuggestionsEmail(
+  email: string,
+  name: string,
+  suggestions: OpportunitySuggestion[]
+) {
+  const rows = suggestions
+    .map(
+      (s) => `
+      <div style="background-color:#f9f9f9;padding:14px 16px;border-radius:8px;margin-top:12px;">
+        <p style="margin:0;font-weight:bold;">${s.company_name}</p>
+        <ul style="margin:6px 0 0;padding-left:20px;">
+          ${s.suggestions.map((r) => `<li><strong>${r.name}</strong> (${r.type}) — ${r.reason}</li>`).join('')}
+        </ul>
+      </div>`
+    )
+    .join('');
+
+  const htmlBody = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+      <h2 style="color:#000;">AI Opportunity Suggestions</h2>
+      <p>Dear ${name},</p>
+      <p>Here are AI-generated catalog matches for your active customers:</p>
+      ${rows}
+      <p style="margin-top:24px;">Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>`;
+
+  try {
+    await transporter.sendMail({
+      from: '"LBC System" <muhammed@elmalitech.com>',
+      to: email,
+      subject: 'AI Opportunity Suggestions — London Bridge Club',
+      html: htmlBody,
+    });
+  } catch (error) {
+    console.error('Failed to send opportunity suggestions email:', error);
+  }
+}
+
+interface MonthlyKpiReportData {
+  totalRevenue: number;
+  totalCommission: number;
+  completionRate: number;
+  winRate: number;
+  totalProjects: number;
+  activeOpportunities: number;
+  pendingApprovals: number;
+  newProjectsThisMonth: { name: string; status: string }[];
+  completedProjectsThisMonth: { name: string; revenue?: string | null; commission?: string | null }[];
+}
+
+export async function sendMonthlyKpiReportEmail(email: string, name: string, data: MonthlyKpiReportData) {
+  const fmt = (n: number) =>
+    n >= 1_000_000 ? `£${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `£${(n / 1_000).toFixed(0)}K` : `£${n.toFixed(0)}`;
+
+  const htmlBody = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+      <h2 style="color:#000;">Monthly KPI Report</h2>
+      <p>Dear ${name},</p>
+      <div style="background-color:#f0fdf4;padding:16px;border-radius:8px;margin-top:16px;">
+        <p style="margin:0;"><strong>Total Project Revenue:</strong> ${fmt(data.totalRevenue)}</p>
+        <p style="margin:8px 0 0;"><strong>Total Commission:</strong> ${fmt(data.totalCommission)}</p>
+        <p style="margin:8px 0 0;"><strong>Project Completion Rate:</strong> ${data.completionRate}%</p>
+        <p style="margin:8px 0 0;"><strong>CRM Win Rate:</strong> ${data.winRate}%</p>
+        <p style="margin:8px 0 0;"><strong>Total Projects:</strong> ${data.totalProjects}</p>
+        <p style="margin:8px 0 0;"><strong>Active CRM Opportunities:</strong> ${data.activeOpportunities}</p>
+        <p style="margin:8px 0 0;"><strong>Pending Approvals:</strong> ${data.pendingApprovals}</p>
+      </div>
+      ${data.completedProjectsThisMonth.length ? `
+      <div style="background-color:#f9f9f9;padding:16px;border-radius:8px;margin-top:16px;">
+        <p style="margin:0;"><strong>Projects Completed This Month</strong></p>
+        ${listItems(data.completedProjectsThisMonth.map((p) => `${p.name}${p.revenue ? ` — Revenue: ${p.revenue}` : ''}${p.commission ? ` | Commission: ${p.commission}` : ''}`))}
+      </div>` : ''}
+      ${data.newProjectsThisMonth.length ? `
+      <div style="background-color:#f9f9f9;padding:16px;border-radius:8px;margin-top:16px;">
+        <p style="margin:0;"><strong>New Projects This Month</strong></p>
+        ${listItems(data.newProjectsThisMonth.map((p) => `${p.name} (${p.status})`))}
+      </div>` : ''}
+      <p style="margin-top:24px;">Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>`;
+
+  try {
+    await transporter.sendMail({
+      from: '"LBC System" <muhammed@elmalitech.com>',
+      to: email,
+      subject: 'Monthly KPI Report — London Bridge Club',
+      html: htmlBody,
+    });
+  } catch (error) {
+    console.error('Failed to send monthly KPI report email:', error);
+  }
+}
+
+interface MissingDataReportData {
+  missingDataOpportunities: { company_name: string; opportunity_title: string; missing: string }[];
+  staleDraftProposals: { title: string }[];
+  customersNoOwner: { company_name: string }[];
+  customersNoContacts: { company_name: string }[];
+}
+
+export async function sendMissingDataReportEmail(email: string, name: string, data: MissingDataReportData) {
+  const section = (label: string, items: string[], bg: string) =>
+    items.length
+      ? `<div style="background-color:${bg};padding:16px;border-radius:8px;margin-top:16px;">
+           <p style="margin:0;"><strong>${label}</strong></p>
+           ${listItems(items)}
+         </div>`
+      : '';
+
+  const htmlBody = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+      <h2 style="color:#000;">Missing Data Report</h2>
+      <p>Dear ${name},</p>
+      <p>The following records have incomplete data that needs attention:</p>
+      ${section('Opportunities Missing Key Data', data.missingDataOpportunities.map((o) => `${o.opportunity_title} — ${o.company_name} (missing: ${o.missing})`), '#fef2f2')}
+      ${section('Proposals Stuck in Draft (3+ days)', data.staleDraftProposals.map((p) => p.title), '#fffbeb')}
+      ${section('Customers Without a Responsible Person', data.customersNoOwner.map((c) => c.company_name), '#fff7ed')}
+      ${section('Customers Without Any Contacts', data.customersNoContacts.map((c) => c.company_name), '#f0f9ff')}
+      <p style="margin-top:24px;">Best regards,<br><strong>The London Bridge Club Team</strong></p>
+    </div>`;
+
+  try {
+    await transporter.sendMail({
+      from: '"LBC System" <muhammed@elmalitech.com>',
+      to: email,
+      subject: 'Missing Data Report — London Bridge Club',
+      html: htmlBody,
+    });
+  } catch (error) {
+    console.error('Failed to send missing data report email:', error);
+  }
+}
+
 export default transporter;
