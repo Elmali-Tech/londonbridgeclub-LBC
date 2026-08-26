@@ -7,7 +7,6 @@ import Cookies from 'js-cookie';
 
 interface Resource {
   id: number;
-  title: string;
   content: string | null;
   category: string | null;
   is_pinned: boolean;
@@ -29,9 +28,19 @@ function categoryColor(cat: string | null) {
   return CATEGORY_COLORS[cat?.toLowerCase() ?? ''] ?? 'bg-gray-100 text-gray-800 border-gray-200';
 }
 
-function excerpt(html: string | null, max = 160): string {
+function plainText(html: string | null): string {
   if (!html) return '';
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function resourceTitle(content: string | null): string {
+  const text = plainText(content);
+  const firstLine = text.split(/[.!?\n]/)[0].trim();
+  return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine || 'Untitled Post';
+}
+
+function excerpt(content: string | null, max = 160): string {
+  const text = plainText(content);
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
@@ -55,7 +64,7 @@ export default function ResourcesPage() {
 
   const filtered = resources.filter((r) => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch = !q || r.title.toLowerCase().includes(q) || excerpt(r.content).toLowerCase().includes(q);
+    const matchesSearch = !q || resourceTitle(r.content).toLowerCase().includes(q) || excerpt(r.content).toLowerCase().includes(q);
     const matchesCat = !categoryFilter || r.category?.toLowerCase() === categoryFilter.toLowerCase();
     return matchesSearch && matchesCat;
   });
@@ -147,7 +156,7 @@ export default function ResourcesPage() {
                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                   </svg>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold text-black mb-1 line-clamp-2">{resource.title}</h3>
+                    <h3 className="text-base font-semibold text-black mb-1 line-clamp-2">{resourceTitle(resource.content)}</h3>
                     {resource.category && (
                       <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border ${categoryColor(resource.category)}`}>
                         {resource.category.charAt(0).toUpperCase() + resource.category.slice(1)}
