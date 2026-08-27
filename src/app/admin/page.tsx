@@ -124,6 +124,9 @@ export default function AdminDashboardPage() {
     winRatePercent: 0,
     upcomingMeetings: [] as Meeting[],
     overdueTasks: { count: 0, items: [] as Task[] },
+    totalRevenue: 0,
+    totalCommission: 0,
+    kpiAchievementRate: 0,
   });
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
@@ -197,6 +200,9 @@ export default function AdminDashboardPage() {
             winRatePercent: data.winRatePercent,
             upcomingMeetings: data.upcomingMeetings,
             overdueTasks: data.overdueTasks,
+            totalRevenue: data.totalRevenue ?? 0,
+            totalCommission: data.totalCommission ?? 0,
+            kpiAchievementRate: data.kpiAchievementRate ?? 0,
           });
         }
       } catch (error) {
@@ -373,6 +379,28 @@ export default function AdminDashboardPage() {
           title="Win Rate"
           value={`${summary.winRatePercent}%`}
           icon={<PercentIcon />}
+          color="indigo"
+        />
+      </div>
+
+      {/* Financial & KPI stats: Revenue, Commission, KPI Achievement */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <StatsCard
+          title="Total Project Revenue"
+          value={formatCurrency(summary.totalRevenue)}
+          icon={<CoinsIcon />}
+          color="green"
+        />
+        <StatsCard
+          title="Total Commission"
+          value={formatCurrency(summary.totalCommission)}
+          icon={<PercentIcon />}
+          color="amber"
+        />
+        <StatsCard
+          title="Project Completion Rate"
+          value={`${summary.kpiAchievementRate}%`}
+          icon={<TargetIcon />}
           color="indigo"
         />
       </div>

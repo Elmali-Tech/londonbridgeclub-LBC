@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { CustomerOpportunity, Project, Task, TaskPriority, TaskRecurrence, TaskStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
-import { FiCheckSquare, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCheckSquare, FiPlus, FiTrash2, FiCalendar, FiList } from "react-icons/fi";
 
 type StaffOption = { id: number; full_name: string };
 
@@ -46,6 +46,8 @@ export default function TasksPage() {
   const [myTasksOnly, setMyTasksOnly] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
 
   const { user, isLoading: isLoadingAuth } = useAuth();
   const router = useRouter();
@@ -201,9 +203,19 @@ export default function TasksPage() {
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Tasks</h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">Daily, weekly and project to-dos.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm transition-colors">
-          <FiPlus /> New Task
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-sm font-bold flex items-center gap-1.5 transition-colors ${viewMode === "list" ? "bg-teal-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}>
+              <FiList className="w-4 h-4" /> List
+            </button>
+            <button onClick={() => setViewMode("calendar")} className={`px-3 py-2 text-sm font-bold flex items-center gap-1.5 transition-colors ${viewMode === "calendar" ? "bg-teal-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}>
+              <FiCalendar className="w-4 h-4" /> Calendar
+            </button>
+          </div>
+          <button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm transition-colors">
+            <FiPlus /> New Task
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -288,14 +300,82 @@ export default function TasksPage() {
         </div>
       )}
 
-      {isLoading ? (
+      {/* ── Calendar view ── */}
+      {!isLoading && viewMode === "calendar" && (() => {
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const tasksByDate = new Map<string, Task[]>();
+        tasks.forEach((t) => {
+          if (t.due_date) {
+            const existing = tasksByDate.get(t.due_date) || [];
+            tasksByDate.set(t.due_date, [...existing, t]);
+          }
+        });
+        const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
+        const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
+        const monthLabel = calendarDate.toLocaleString("en-GB", { month: "long", year: "numeric" });
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const cells: (number | null)[] = [
+          ...Array.from({ length: firstDay === 0 ? 6 : firstDay - 1 }, (): null => null),
+          ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+        ];
+        // Pad to full weeks
+        while (cells.length % 7 !== 0) cells.push(null);
+
+        return (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">←</button>
+              <h3 className="font-black text-gray-900 dark:text-white">{monthLabel}</h3>
+              <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">→</button>
+            </div>
+            <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-800">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                <div key={d} className="py-2 text-center text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {cells.map((day, idx) => {
+                if (day === null) return <div key={`empty-${idx}`} className="border-b border-r border-gray-50 dark:border-gray-800/50 p-1 min-h-[80px]" />;
+                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const dayTasks = tasksByDate.get(dateStr) || [];
+                const isToday = dateStr === todayStr;
+                return (
+                  <div key={dateStr} className={`border-b border-r border-gray-50 dark:border-gray-800/50 p-1.5 min-h-[80px] ${isToday ? "bg-teal-50/40 dark:bg-teal-900/10" : ""}`}>
+                    <div className={`text-xs font-bold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? "bg-teal-600 text-white" : "text-gray-600 dark:text-gray-400"}`}>{day}</div>
+                    <div className="space-y-0.5">
+                      {dayTasks.slice(0, 3).map((t) => (
+                        <div key={t.id} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded truncate ${
+                          t.status === "Done" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 line-through"
+                          : t.status === "In Progress" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        }`} title={t.title}>{t.title}</div>
+                      ))}
+                      {dayTasks.length > 3 && <div className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold pl-1">+{dayTasks.length - 3} more</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex gap-4 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-gray-100 dark:bg-gray-800 inline-block" />To Do</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 dark:bg-blue-900/30 inline-block" />In Progress</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-100 dark:bg-green-900/30 inline-block" />Done</span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {viewMode === "list" && isLoading ? (
         <div className="py-20 flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600"></div></div>
-      ) : visibleTasks.length === 0 ? (
+      ) : viewMode === "list" && visibleTasks.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 py-24 text-center">
           <FiCheckSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nothing here</h3>
         </div>
-      ) : (
+      ) : viewMode === "list" ? (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
           {visibleTasks.map((task) => {
             const isOverdue = task.status !== "Done" && !!task.due_date && task.due_date < today;
@@ -327,7 +407,7 @@ export default function TasksPage() {
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
