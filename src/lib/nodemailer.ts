@@ -1,20 +1,20 @@
 import nodemailer from "nodemailer";
 import path from "path";
 
-const email = process.env.GMAIL_EMAIL;
+const senderEmail = process.env.GMAIL_EMAIL;
 const pass = process.env.LBC_GMAIL_APP_PASSWORD || process.env.GMAIL_APP_PASSWORD;
 
 export const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: email,
+    user: senderEmail,
     pass: pass,
   },
 });
 
 export const mailOptions = {
-  from: email,
-  to: email,
+  from: senderEmail,
+  to: senderEmail,
 };
 
 export async function sendWelcomeEmail(email: string, name: string) {
@@ -36,7 +36,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
   `;
 
   await transporter.sendMail({
-    from: '"LondonBridge" <muhammed@elmalitech.com>',
+    from: `"LondonBridge" <${senderEmail}>`,
     to: email,
     subject: `Welcome to the London Bridge Club, ${name}`,
     html: htmlBody,
@@ -85,7 +85,7 @@ export async function sendApprovalRequestEmail(userData: { fullName: string; ema
   `;
 
   await transporter.sendMail({
-    from: '"LBC System" <muhammed@elmalitech.com>',
+    from: `"LBC System" <${senderEmail}>`,
     to: "info@londonbridge.club",
     subject: `New Registration: ${userData.fullName}`,
     html: htmlBody,
@@ -111,7 +111,7 @@ export async function sendUserApprovedEmail(email: string, name: string) {
   `;
 
   await transporter.sendMail({
-    from: '"LondonBridge" <muhammed@elmalitech.com>',
+    from: `"LondonBridge" <${senderEmail}>`,
     to: email,
     subject: `Your LBC Membership Application has been Approved!`,
     html: htmlBody,
@@ -136,7 +136,7 @@ export async function sendInvitationEmail(email: string, invitationLink: string)
   `;
 
   await transporter.sendMail({
-    from: '"LondonBridge" <muhammed@elmalitech.com>',
+    from: `"LondonBridge" <${senderEmail}>`,
     to: email,
     subject: `Invitation to join the London Bridge Club`,
     html: htmlBody,
@@ -176,7 +176,7 @@ export async function sendReviewDecisionEmail(
   `;
 
   await transporter.sendMail({
-    from: '"LBC System" <muhammed@elmalitech.com>',
+    from: `"LBC System" <${senderEmail}>`,
     to: email,
     subject: isApproved ? `Your ${entityLabel} submission was approved & published` : `Revision requested on your ${entityLabel} submission`,
     html: htmlBody,
@@ -199,7 +199,7 @@ export async function sendSystemNotification(action: string, details: string) {
 
   try {
     await transporter.sendMail({
-      from: '"LBC System" <muhammed@elmalitech.com>',
+      from: `"LBC System" <${senderEmail}>`,
       to: "info@londonbridge.club",
       subject: `System Alert: ${action}`,
       html: htmlBody,
@@ -252,7 +252,7 @@ export async function sendDailyDigestEmail(email: string, name: string, items: D
 
   try {
     await transporter.sendMail({
-      from: '"LBC System" <muhammed@elmalitech.com>',
+      from: `"LBC System" <${senderEmail}>`,
       to: email,
       subject: 'Your Daily Digest — London Bridge Club',
       html: htmlBody,
@@ -311,7 +311,7 @@ export async function sendWeeklyReportEmail(email: string, name: string, data: W
 
   try {
     await transporter.sendMail({
-      from: '"LBC System" <muhammed@elmalitech.com>',
+      from: `"LBC System" <${senderEmail}>`,
       to: email,
       subject: `${periodLabel} Management Report — London Bridge Club`,
       html: htmlBody,
