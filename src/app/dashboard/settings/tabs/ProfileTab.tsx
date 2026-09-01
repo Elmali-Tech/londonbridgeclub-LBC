@@ -7,6 +7,23 @@ import ImageEditModal from '@/app/components/profile/ImageEditModal';
 import { toast } from 'react-hot-toast';
 import { HiPencil } from 'react-icons/hi';
 import { getAssetPublicUrl } from '@/lib/storage';
+import Cookies from 'js-cookie';
+
+function getAuthToken(): string {
+  return localStorage.getItem('authToken') || Cookies.get('authToken') || '';
+}
+
+async function profileUpdateFetch(body: Record<string, unknown>): Promise<{ success: boolean; user?: unknown }> {
+  const res = await fetch('/api/profile/update', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
 
 // Define user data interface
 interface UserProfileData {
@@ -28,7 +45,7 @@ interface UserProfileData {
 }
 
 export default function ProfileTab() {
-  const { user } = useAuth();
+  const { user, updateUserData } = useAuth();
   const [saving, setSaving] = useState(false);
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [formData, setFormData] = useState<Partial<UserProfileData>>({});
@@ -68,137 +85,82 @@ export default function ProfileTab() {
     }));
   };
 
-  // Handle profile image upload
   const handleProfileImageUploaded = async (key: string) => {
     if (!user) return;
-    
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
+      const data = await profileUpdateFetch({ profile_image_key: key });
+      if (!data.success) throw new Error();
       setProfileData(prev => prev ? { ...prev, profile_image_key: key } : null);
-      setFormData(prev => ({
-        ...prev,
-        profile_image_key: key
-      }));
-      
+      setFormData(prev => ({ ...prev, profile_image_key: key }));
+      if (data.user) updateUserData(data.user as Parameters<typeof updateUserData>[0]);
       toast.success('Profile photo updated successfully');
-    } catch (error) {
-      console.error('Failed to update profile image:', error);
+    } catch {
       toast.error('Failed to update profile photo');
     }
   };
 
-  // Handle profile image removal
   const handleProfileImageRemoved = async () => {
     if (!user) return;
-    
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ profile_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
+      const data = await profileUpdateFetch({ profile_image_key: null });
+      if (!data.success) throw new Error();
       setProfileData(prev => prev ? { ...prev, profile_image_key: undefined } : null);
-      setFormData(prev => ({
-        ...prev,
-        profile_image_key: undefined
-      }));
-      
+      setFormData(prev => ({ ...prev, profile_image_key: undefined }));
+      if (data.user) updateUserData(data.user as Parameters<typeof updateUserData>[0]);
       toast.success('Profile photo removed successfully');
-    } catch (error) {
-      console.error('Failed to remove profile image:', error);
+    } catch {
       toast.error('Failed to remove profile photo');
     }
   };
-  
-  // Handle banner image upload
+
   const handleBannerImageUploaded = async (key: string) => {
     if (!user) return;
-    
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: key })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
+      const data = await profileUpdateFetch({ banner_image_key: key });
+      if (!data.success) throw new Error();
       setProfileData(prev => prev ? { ...prev, banner_image_key: key } : null);
-      setFormData(prev => ({
-        ...prev,
-        banner_image_key: key
-      }));
-      
+      setFormData(prev => ({ ...prev, banner_image_key: key }));
+      if (data.user) updateUserData(data.user as Parameters<typeof updateUserData>[0]);
       toast.success('Cover photo updated successfully');
-    } catch (error) {
-      console.error('Failed to update banner image:', error);
+    } catch {
       toast.error('Failed to update cover photo');
     }
   };
 
-  // Handle banner image removal
   const handleBannerImageRemoved = async () => {
     if (!user) return;
-    
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ banner_image_key: null })
-        .eq('id', user.id);
-        
-      if (error) throw error;
-      
+      const data = await profileUpdateFetch({ banner_image_key: null });
+      if (!data.success) throw new Error();
       setProfileData(prev => prev ? { ...prev, banner_image_key: undefined } : null);
-      setFormData(prev => ({
-        ...prev,
-        banner_image_key: undefined
-      }));
-      
+      setFormData(prev => ({ ...prev, banner_image_key: undefined }));
+      if (data.user) updateUserData(data.user as Parameters<typeof updateUserData>[0]);
       toast.success('Cover photo removed successfully');
-    } catch (error) {
-      console.error('Failed to remove banner image:', error);
+    } catch {
       toast.error('Failed to remove cover photo');
     }
   };
 
-  // Save user profile changes
   const handleSaveProfile = async () => {
     if (!user) return;
-    
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: formData.full_name,
-          username: formData.username,
-          headline: formData.headline,
-          bio: formData.bio,
-          location: formData.location,
-          industry: formData.industry,
-          linkedin_url: formData.linkedin_url,
-          website_url: formData.website_url,
-          date_of_birth: formData.date_of_birth
-        })
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      
-      setProfileData(prev => ({
-        ...prev!,
-        ...formData
-      }));
-      
+      const data = await profileUpdateFetch({
+        full_name: formData.full_name,
+        username: formData.username,
+        headline: formData.headline,
+        bio: formData.bio,
+        location: formData.location,
+        industry: formData.industry,
+        linkedin_url: formData.linkedin_url,
+        website_url: formData.website_url,
+        date_of_birth: formData.date_of_birth || null,
+      });
+      if (!data.success) throw new Error();
+      setProfileData(prev => ({ ...prev!, ...formData }));
+      if (data.user) updateUserData(data.user as Parameters<typeof updateUserData>[0]);
       toast.success('Profile information updated successfully');
-    } catch (error) {
-      console.error('Failed to update profile:', error);
+    } catch {
       toast.error('Failed to update profile information');
     } finally {
       setSaving(false);
