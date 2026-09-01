@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const body = await request.json();
-    const { company_name, industry, website_url, address, solutions_used, responsible_person } = body;
+    const { company_name, industry, website_url, address, solutions_used, responsible_person, partner_id } = body;
 
     if (!company_name || !company_name.trim()) {
       return NextResponse.json({ success: false, error: 'Company name is required' }, { status: 400 });
@@ -56,6 +56,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         address: address || null,
         solutions_used: solutions_used || null,
         responsible_person: responsible_person || null,
+        partner_id: partner_id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

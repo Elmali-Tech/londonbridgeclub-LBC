@@ -4,35 +4,35 @@ import { requireRole } from '@/lib/permissions';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 
-// GET - List all customers, with a contact count for each
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireRole(request, [...CRM_ROLES]);
     if (auth.response) return auth.response;
 
     const supabase = createClient();
-    const { data: customers, error } = await supabase
-      .from('customers')
-      .select('*')
-      .order('company_name', { ascending: true });
+    const [{ data: customers, error }, { data: contactRows }, { data: partners }] = await Promise.all([
+      supabase.from('customers').select('*').order('company_name', { ascending: true }),
+      supabase.from('customer_contacts').select('customer_id'),
+      supabase.from('partners').select('id, name'),
+    ]);
 
     if (error) {
       console.error('Error fetching customers:', error);
       return NextResponse.json({ success: false, error: 'Failed to fetch customers' }, { status: 500 });
     }
 
-    const { data: contactRows } = await supabase
-      .from('customer_contacts')
-      .select('customer_id');
-
     const contactCounts = new Map<number, number>();
     (contactRows || []).forEach((row: { customer_id: number }) => {
       contactCounts.set(row.customer_id, (contactCounts.get(row.customer_id) || 0) + 1);
     });
 
+    const partnerMap = new Map<number, string>();
+    (partners || []).forEach((p: { id: number; name: string }) => partnerMap.set(p.id, p.name));
+
     const enriched = (customers || []).map((customer) => ({
       ...customer,
       contact_count: contactCounts.get(customer.id) || 0,
+      partner_name: customer.partner_id ? (partnerMap.get(customer.partner_id) ?? null) : null,
     }));
 
     return NextResponse.json({ success: true, customers: enriched });
@@ -42,14 +42,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new customer
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireRole(request, [...CRM_ROLES]);
     if (auth.response) return auth.response;
 
     const body = await request.json();
-    const { company_name, industry, website_url, address, solutions_used, responsible_person } = body;
+    const { company_name, industry, website_url, address, solutions_used, responsible_person, partner_id } = body;
 
     if (!company_name || !company_name.trim()) {
       return NextResponse.json({ success: false, error: 'Company name is required' }, { status: 400 });
@@ -65,6 +64,7 @@ export async function POST(request: NextRequest) {
         address: address || null,
         solutions_used: solutions_used || null,
         responsible_person: responsible_person || null,
+        partner_id: partner_id || null,
         created_by: auth.user.id,
       })
       .select()

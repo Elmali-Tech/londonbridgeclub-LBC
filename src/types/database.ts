@@ -229,6 +229,19 @@ export interface Customer {
   address?: string | null;
   solutions_used?: string | null;
   responsible_person?: number | null;
+  partner_id?: number | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Service {
+  id: number;
+  name: string;
+  description?: string | null;
+  partner_id: number;
+  customer_id: number;
+  status: string;
   created_by?: number | null;
   created_at: string;
   updated_at: string;

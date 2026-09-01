@@ -8,12 +8,14 @@ import { Customer, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiGrid, FiList, FiPlus, FiBriefcase, FiUsers, FiLink, FiTrash2 } from "react-icons/fi";
 
-type CustomerWithCount = Customer & { contact_count: number };
+type CustomerWithCount = Customer & { contact_count: number; partner_name?: string | null };
 type StaffOption = { id: number; full_name: string };
+type PartnerOption = { id: number; name: string };
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerWithCount[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -28,6 +30,7 @@ export default function CustomersPage() {
     address: "",
     solutions_used: "",
     responsible_person: "" as number | "",
+    partner_id: "" as number | "",
   });
 
   const { user, isLoading: isLoadingAuth } = useAuth();
@@ -51,7 +54,18 @@ export default function CustomersPage() {
   useEffect(() => {
     fetchCustomers();
     fetchStaff();
+    fetchPartners();
   }, []);
+
+  const fetchPartners = async () => {
+    try {
+      const response = await fetch("/api/admin/partners", { headers: authHeaders() });
+      const data = await response.json();
+      if (data.success) setPartners((data.partners || []).map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
+    } catch (error) {
+      console.error("Error fetching partners:", error);
+    }
+  };
 
   const fetchStaff = async () => {
     try {
@@ -102,6 +116,7 @@ export default function CustomersPage() {
       address: "",
       solutions_used: "",
       responsible_person: "",
+      partner_id: "",
     });
   };
 
@@ -132,6 +147,7 @@ export default function CustomersPage() {
         body: JSON.stringify({
           ...formData,
           responsible_person: formData.responsible_person || null,
+          partner_id: formData.partner_id || null,
         }),
       });
       const data = await response.json();
@@ -271,7 +287,22 @@ export default function CustomersPage() {
               />
             </div>
 
-            <div className="space-y-1.5 md:col-span-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Partner</label>
+              <select
+                name="partner_id"
+                value={formData.partner_id}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+              >
+                <option value="">No partner</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Responsible Person</label>
               <select
                 name="responsible_person"
@@ -355,6 +386,11 @@ export default function CustomersPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-black tracking-tight text-gray-900 dark:text-white group-hover:text-teal-600 transition-colors line-clamp-2 leading-tight">{customer.company_name}</h3>
                   {customer.industry && <p className="text-xs text-gray-400 mt-0.5">{customer.industry}</p>}
+                  {customer.partner_name && (
+                    <span className="inline-block mt-1 text-[10px] font-bold uppercase bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded">
+                      {customer.partner_name}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -403,6 +439,7 @@ export default function CustomersPage() {
               <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-800/50">
                 <tr>
                   <th className="px-6 py-4 font-bold">Company</th>
+                  <th className="px-6 py-4 font-bold">Partner</th>
                   <th className="px-6 py-4 font-bold">Owner</th>
                   <th className="px-6 py-4 font-bold">Contacts</th>
                   <th className="px-6 py-4 font-bold text-right">Actions</th>
@@ -416,6 +453,9 @@ export default function CustomersPage() {
                         {customer.company_name}
                       </Link>
                       {customer.industry && <p className="text-xs text-gray-400 mt-0.5">{customer.industry}</p>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      {customer.partner_name ?? "—"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                       {getResponsibleName(customer.responsible_person) || "Unassigned"}
