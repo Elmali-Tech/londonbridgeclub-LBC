@@ -40,8 +40,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setMessage('Password must be at least 6 characters');
+    if (password.length < 12) {
+      setMessage('Password must be at least 12 characters');
       setMessageType('error');
       return;
     }
@@ -130,9 +130,9 @@ export default function ResetPasswordPage() {
                       id="new-password"
                       name="newPassword"
                       type={showPassword ? 'text' : 'password'}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 12 characters"
                       required
-                      minLength={6}
+                      minLength={12}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-sm focus:outline-none focus:ring-1 focus:ring-black focus:border-black text-gray-900"
@@ -167,7 +167,7 @@ export default function ResetPasswordPage() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       placeholder="Re-enter your password"
                       required
-                      minLength={6}
+                      minLength={12}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-sm focus:outline-none focus:ring-1 focus:ring-black focus:border-black text-gray-900"

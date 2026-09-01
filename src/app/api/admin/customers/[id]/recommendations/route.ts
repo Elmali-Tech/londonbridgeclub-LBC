@@ -4,6 +4,26 @@ import { requireRole } from '@/lib/permissions';
 import { generateRecommendations } from '@/lib/gemini';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+const recommendationRequests = new Map<number, { count: number; resetAt: number }>();
+
+function isRateLimited(userId: number): { limited: boolean; retryAfter: number } {
+  const now = Date.now();
+  const current = recommendationRequests.get(userId);
+
+  if (!current || current.resetAt <= now) {
+    recommendationRequests.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { limited: false, retryAfter: 0 };
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return { limited: true, retryAfter: Math.ceil((current.resetAt - now) / 1000) };
+  }
+
+  current.count += 1;
+  return { limited: false, retryAfter: 0 };
+}
 
 // POST - Generate AI recommendations matching this customer against the Benefits/Partners
 // catalog. Generated fresh each call, not persisted.
@@ -11,6 +31,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const auth = await requireRole(request, [...CRM_ROLES]);
     if (auth.response) return auth.response;
+
+    const rateLimit = isRateLimited(auth.user.id);
+    if (rateLimit.limited) {
+      return NextResponse.json(
+        { success: false, error: 'Too many recommendation requests. Please try again shortly.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
+      );
+    }
 
     const { id } = await params;
     const supabase = createClient();

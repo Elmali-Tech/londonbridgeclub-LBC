@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPortalSession } from '@/lib/stripe';
-import { validateToken } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { validateSession } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
   try {
-    // JSON veriyi al
-    const { token } = await req.json();
-
-    // Token'ı doğrula ve kullanıcıyı al
-    const user = await validateToken(token);
+    const user = await validateSession(req);
     if (!user) {
       return NextResponse.json({ error: 'Yetkilendirme başarısız' }, { status: 401 });
     }
 
     // Kullanıcının Stripe müşteri ID'sini al
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('users')
       .select('stripe_customer_id')
@@ -40,4 +37,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

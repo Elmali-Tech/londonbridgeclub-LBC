@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase';
 
 // GET - Kullanıcının okunmamış mesaj sayısını getir
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await validateToken(token);
+    const user = await validateSession(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -42,4 +37,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

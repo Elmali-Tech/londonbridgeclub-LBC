@@ -25,7 +25,6 @@ async function profileUpdateFetch(body: Record<string, unknown>): Promise<{ succ
   return res.json();
 }
 
-// Define user data interface
 interface UserProfileData {
   id: number;
   email: string;
@@ -52,37 +51,28 @@ export default function ProfileTab() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showBannerModal, setShowBannerModal] = useState(false);
 
-  // Fetch user profile data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return;
-      
       try {
-        const { data: userData, error: userError } = await supabase
+        const { data, error } = await supabase
           .from('users')
           .select('*')
           .eq('id', user.id)
           .single();
-        
-        if (userError) throw userError;
-        
-        setProfileData(userData as UserProfileData);
-        setFormData(userData as UserProfileData);
+        if (error) throw error;
+        setProfileData(data as UserProfileData);
+        setFormData(data as UserProfileData);
       } catch (error) {
         console.error('Failed to fetch user data:', error);
       }
     };
-    
     fetchUserData();
   }, [user]);
 
-  // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleProfileImageUploaded = async (key: string) => {
@@ -167,7 +157,6 @@ export default function ProfileTab() {
     }
   };
 
-  // Get user initials for fallback
   const getUserInitials = () => {
     if (!profileData?.full_name) return 'U';
     return profileData.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase();
@@ -175,7 +164,6 @@ export default function ProfileTab() {
 
   return (
     <div className="space-y-6">
-      {/* Modals */}
       <ImageEditModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
@@ -184,7 +172,7 @@ export default function ProfileTab() {
         onImageUploaded={handleProfileImageUploaded}
         onImageRemoved={handleProfileImageRemoved}
       />
-      
+
       <ImageEditModal
         isOpen={showBannerModal}
         onClose={() => setShowBannerModal(false)}
@@ -196,10 +184,9 @@ export default function ProfileTab() {
 
       {/* Profile Images Section */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        {/* Banner Image */}
         <div className="relative h-48 sm:h-56 md:h-64 bg-gradient-to-r from-amber-100 to-amber-200 group">
           {profileData?.banner_image_key ? (
-            <img 
+            <img
               src={getAssetPublicUrl(profileData.banner_image_key)}
               alt="Banner"
               className="w-full h-full object-cover"
@@ -214,8 +201,6 @@ export default function ProfileTab() {
               </div>
             </div>
           )}
-          
-          {/* Banner Edit Button */}
           <button
             onClick={() => setShowBannerModal(true)}
             className="absolute top-4 right-4 p-2.5 bg-white/90 hover:bg-white rounded-full shadow-lg backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
@@ -224,8 +209,7 @@ export default function ProfileTab() {
             <HiPencil className="w-5 h-5 text-gray-700" />
           </button>
         </div>
-        
-        {/* Profile Picture - Overlapping Banner */}
+
         <div className="relative px-6 pb-6">
           <div className="flex items-end justify-between -mt-16">
             <div className="relative group">
@@ -242,8 +226,6 @@ export default function ProfileTab() {
                   </div>
                 )}
               </div>
-              
-              {/* Profile Picture Edit Button */}
               <button
                 onClick={() => setShowProfileModal(true)}
                 className="absolute top-0 right-0 p-2 bg-white hover:bg-gray-50 rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100 z-10 border border-gray-200"
@@ -255,7 +237,7 @@ export default function ProfileTab() {
           </div>
         </div>
       </div>
-      
+
       {/* Profile Information */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -266,26 +248,26 @@ export default function ProfileTab() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900">Profile Information</h2>
         </div>
-        
+
         <div className="space-y-8">
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Individual Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                <input 
+                <input
                   type="text"
-                  name="full_name" 
+                  name="full_name"
                   value={formData.full_name || ''}
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                   placeholder="Enter your full name"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                <input 
+                <input
                   type="text"
                   name="username"
                   value={formData.username || ''}
@@ -294,10 +276,10 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                <input 
+                <input
                   type="email"
                   name="email"
                   value={formData.email || ''}
@@ -306,10 +288,10 @@ export default function ProfileTab() {
                 />
                 <p className="text-xs text-gray-500 mt-1">Contact support to change your email address</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Professional Headline</label>
-                <input 
+                <input
                   type="text"
                   name="headline"
                   value={formData.headline || ''}
@@ -318,10 +300,10 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                <input 
+                <input
                   type="text"
                   name="location"
                   value={formData.location || ''}
@@ -330,10 +312,10 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Industry</label>
-                <input 
+                <input
                   type="text"
                   name="industry"
                   value={formData.industry || ''}
@@ -342,13 +324,13 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Date of Birth
                   <span className="text-xs text-gray-500 ml-2">(Optional)</span>
                 </label>
-                <input 
+                <input
                   type="date"
                   name="date_of_birth"
                   value={formData.date_of_birth ? new Date(formData.date_of_birth).toISOString().split('T')[0] : ''}
@@ -358,10 +340,10 @@ export default function ProfileTab() {
                 />
                 <p className="text-xs text-gray-500 mt-1">Your birthday will be celebrated on the dashboard</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn URL</label>
-                <input 
+                <input
                   type="url"
                   name="linkedin_url"
                   value={formData.linkedin_url || ''}
@@ -370,10 +352,10 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
-                <input 
+                <input
                   type="url"
                   name="website_url"
                   value={formData.website_url || ''}
@@ -382,10 +364,10 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                 />
               </div>
-              
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">About</label>
-                <textarea 
+                <textarea
                   name="bio"
                   value={formData.bio || ''}
                   onChange={handleInputChange}
@@ -394,7 +376,7 @@ export default function ProfileTab() {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors resize-none"
                 ></textarea>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Membership Type</label>
                 <div className="w-full border border-gray-300 rounded-lg px-4 py-3 bg-gray-50 flex items-center">
@@ -406,9 +388,9 @@ export default function ProfileTab() {
               </div>
             </div>
           </div>
-          
+
           <div className="pt-6 border-t border-gray-200">
-            <button 
+            <button
               onClick={handleSaveProfile}
               disabled={saving}
               className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md disabled:cursor-not-allowed"

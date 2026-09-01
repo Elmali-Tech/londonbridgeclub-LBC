@@ -49,4 +49,4 @@ export async function PUT(request: NextRequest) {
     console.error('Unexpected error in profile update:', error);
     return NextResponse.json({ success: false, error: 'An unexpected error occurred' }, { status: 500 });
   }
-} 
+}

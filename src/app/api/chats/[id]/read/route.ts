@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase';
 
 // POST - Sohbeti okundu olarak işaretle
@@ -8,12 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await validateToken(token);
+    const user = await validateSession(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -62,4 +57,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

@@ -5,20 +5,49 @@ import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+function getServerServiceKey(): string {
+  const serviceKey =
+    process.env.LBC_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY on the server');
+  }
+  return serviceKey;
+}
+
 // Singleton instances
 let clientInstance: SupabaseClient | null = null;
 let serverClientInstance: SupabaseClient | null = null;
 
-// Browser tarafında kullanılacak client (singleton)
-export const supabase = (() => {
-  if (typeof window === 'undefined') {
-    // Server-side rendering sırasında yeni instance oluştur
-    return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+function getServerClient(): SupabaseClient {
+  if (!serverClientInstance) {
+    serverClientInstance = createSupabaseClient(supabaseUrl, getServerServiceKey(), {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+        detectSessionInUrl: false,
       },
     });
+  }
+  return serverClientInstance;
+}
+
+function createLazyServerClient(): SupabaseClient {
+  return new Proxy({} as SupabaseClient, {
+    get(_target, property) {
+      const client = getServerClient();
+      const value = Reflect.get(client, property);
+      return typeof value === 'function' ? value.bind(client) : value;
+    },
+  });
+}
+
+// Browser tarafında kullanılacak client (singleton)
+export const supabase = (() => {
+  if (typeof window === 'undefined') {
+    // Resolve the private key only when a request actually uses the client, not
+    // while Next.js imports route modules during an environment-free build.
+    return createLazyServerClient();
   }
   
   // Browser'da singleton pattern kullan
@@ -47,24 +76,21 @@ export function createClient(): SupabaseClient {
     return supabase;
   }
   
-  // Server-side için singleton
-  if (!serverClientInstance) {
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
-    serverClientInstance = createSupabaseClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-  }
-  
-  return serverClientInstance;
+  return createLazyServerClient();
 }
 
 // Connection durumunu kontrol etme fonksiyonu
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.from('users').select('id').limit(1);
+    if (typeof window !== 'undefined') {
+      const response = await fetch('/api/auth/session', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      return response.status !== 500;
+    }
+
+    const { error } = await supabase.from('users').select('id').limit(1);
     return !error;
   } catch (error) {
     console.error('Supabase connection error:', error);
@@ -84,4 +110,4 @@ export const cleanupSupabase = () => {
   if (clientInstance) {
     clientInstance.realtime.disconnect();
   }
-}; 
+};

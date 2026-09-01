@@ -1,16 +1,48 @@
 import { NextResponse } from "next/server";
 import transporter from "@/lib/nodemailer";
 import crypto from "crypto";
+import { createClient } from "@/lib/supabase/server";
+import { consumeAuthRateLimit } from "@/lib/rateLimit";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const email = (body?.email || "").toString().trim().toLowerCase();
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    if (!email || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
     }
 
-    const secret = process.env.RESET_PASSWORD_SECRET;
+    const rateLimit = consumeAuthRateLimit("forgot-password", req, email, {
+      windowMs: 60 * 60 * 1000,
+      emailLimit: 3,
+      ipLimit: 15,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many password reset requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter) } },
+      );
+    }
+
+    const secret =
+      process.env.LBC_RESET_PASSWORD_SECRET ||
+      process.env.RESET_PASSWORD_SECRET;
     if (!secret) {
       console.error("Missing RESET_PASSWORD_SECRET env var");
       return NextResponse.json(
@@ -19,8 +51,25 @@ export async function POST(req: Request) {
       );
     }
 
+    const supabase = createClient();
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("password_hash")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (userError) throw userError;
+    // Keep the response identical so callers cannot enumerate member emails.
+    if (!user?.password_hash) {
+      return NextResponse.json({ ok: true });
+    }
+
     const expires = Date.now() + 1000 * 60 * 60;
-    const payload = `${email}|${expires}`;
+    const passwordVersion = crypto
+      .createHmac("sha256", secret)
+      .update(`password-version:${user.password_hash}`)
+      .digest("hex");
+    const payload = `${email}|${expires}|${passwordVersion}`;
     const signature = crypto
       .createHmac("sha256", secret)
       .update(payload)
@@ -28,12 +77,13 @@ export async function POST(req: Request) {
     const token = `${Buffer.from(payload).toString("base64")}.${signature}`;
 
     const base =
-      process.env.NEXT_PUBLIC_APP_URL ||
       process.env.APP_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
       "https://londonbridge.club";
     const resetUrl = `${base}/reset-password?token=${encodeURIComponent(
       token
     )}`;
+    const escapedEmail = escapeHtml(email);
 
     const html = `
       <!DOCTYPE html>
@@ -68,7 +118,7 @@ export async function POST(req: Request) {
                         Hello,
                       </p>
                       <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                        We received a request to reset the password for the account associated with <strong>${email}</strong>.
+                        We received a request to reset the password for the account associated with <strong>${escapedEmail}</strong>.
                       </p>
                       <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #333333;">
                         Click the button below to reset your password. This link will expire in 1 hour.
@@ -133,7 +183,7 @@ export async function POST(req: Request) {
       </html>
     `;
 
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from: process.env.GMAIL_EMAIL,
       to: email,
       subject: "London Bridge Club - Password Reset",

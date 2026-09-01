@@ -1,75 +1,78 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types/database';
-import { login, register, logout, validateToken } from '../lib/auth';
-import Cookies from 'js-cookie';
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { User } from '@/types/database';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (email: string, password: string, fullName: string, status: 'personal' | 'corporate', linkedinUrl?: string) => Promise<boolean>;
+  register: (
+    email: string,
+    password: string,
+    fullName: string,
+    status: 'personal' | 'corporate',
+    linkedinUrl?: string,
+  ) => Promise<boolean>;
   logout: () => Promise<boolean>;
   updateUserData: (userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Compatibility marker for older UI code that still checks this key before a
+// same-origin fetch. It is deliberately not a credential; the real token is
+// only stored in the HttpOnly cookie and validated on the server.
+const LEGACY_SESSION_MARKER = 'http-only-session';
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
+async function getErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    return typeof body?.error === 'string' ? body.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    // Sayfa yüklendiğinde token kontrolü yap
-    const checkToken = async () => {
-      if (!isMounted) return;
-      
-      // console.log('AuthContext - Token kontrolü başladı');
+    const loadSession = async () => {
       setIsLoading(true);
-      
+      // Tokens are now kept in an HttpOnly cookie. Remove the legacy JS copy.
+      localStorage.removeItem('authToken');
+
       try {
-        const token = Cookies.get('authToken') || localStorage.getItem('authToken');
-        console.log('AuthContext - Token bulundu mu:', token ? 'Evet' : 'Hayır');
-        
-        if (token) {
-          // console.log('AuthContext - Token doğrulanıyor...');
-          const user = await validateToken(token);
-          // console.log('AuthContext - Token doğrulama sonucu:', user);
-          
-          if (isMounted) {
-            if (user) {
-              // console.log('AuthContext - Kullanıcı bilgisi yüklendi:', user);
-              setUser(user);
-              // Token'ı cookie'ye de kaydet
-              Cookies.set('authToken', token, { expires: 7 }); // 7 günlük
-            } else {
-              // console.log('AuthContext - Token geçersiz, temizleniyor');
-              // Token geçersizse temizle
-              localStorage.removeItem('authToken');
-              Cookies.remove('authToken');
-              setUser(null);
-            }
-          }
+        const response = await fetch('/api/auth/session', {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
+        if (!isMounted) return;
+
+        if (response.ok) {
+          const body = await response.json();
+          setUser(body.user ?? null);
+          localStorage.setItem('authToken', LEGACY_SESSION_MARKER);
         } else {
-          console.log('AuthContext - Token bulunamadı');
-          if (isMounted) {
-            setUser(null);
-          }
+          localStorage.removeItem('authToken');
+          setUser(null);
         }
-      } catch (error) {
-        console.error('AuthContext - Token kontrolü sırasında hata:', error);
+      } catch (sessionError) {
+        console.error('AuthContext session check failed:', sessionError);
         if (isMounted) {
-          setError('Token kontrolü sırasında bir hata oluştu');
+          setError('Unable to verify your session');
           setUser(null);
         }
       } finally {
@@ -79,9 +82,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
     };
-    
-    checkToken();
 
+    void loadSession();
     return () => {
       isMounted = false;
     };
@@ -90,88 +92,93 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const handleLogin = async (email: string, password: string): Promise<boolean> => {
     setError(null);
     setIsLoading(true);
-    
+    localStorage.removeItem('authToken');
+
     try {
-      const result = await login(email, password);
-      
-      if (result) {
-        setUser(result.user);
-        // Token'ı hem localStorage'a hem de cookie'ye kaydet
-        localStorage.setItem('authToken', result.token);
-        Cookies.set('authToken', result.token, { expires: 7 }); // 7 günlük
-        setIsLoading(false);
-        return true;
-      } else {
-        setError('Invalid email or password');
-        setIsLoading(false);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        setError(await getErrorMessage(response, 'Invalid email or password'));
+        setUser(null);
         return false;
       }
-    } catch {
+
+      const body = await response.json();
+      setUser(body.user ?? null);
+      localStorage.setItem('authToken', LEGACY_SESSION_MARKER);
+      return !!body.user;
+    } catch (loginError) {
+      console.error('AuthContext login failed:', loginError);
       setError('An error occurred during login');
-      setIsLoading(false);
+      setUser(null);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRegister = async (email: string, password: string, fullName: string, status: 'personal' | 'corporate' = 'personal', linkedinUrl?: string): Promise<boolean> => {
+  const handleRegister = async (
+    email: string,
+    password: string,
+    fullName: string,
+    status: 'personal' | 'corporate' = 'personal',
+    linkedinUrl?: string,
+  ): Promise<boolean> => {
     setError(null);
     setIsLoading(true);
-    
+
     try {
-      const user = await register(email, password, fullName, status, linkedinUrl);
-      
-      if (user) {
-        // Kayıt başarılı, otomatik login olma
-        const loginResult = await login(email, password);
-        
-        if (loginResult) {
-          setUser(loginResult.user);
-          localStorage.setItem('authToken', loginResult.token);
-          Cookies.set('authToken', loginResult.token, { expires: 7 }); // 7 günlük
-          setIsLoading(false);
-          return true;
-        }
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password, fullName, status, linkedinUrl }),
+      });
+
+      if (!response.ok) {
+        setError(await getErrorMessage(response, 'Registration failed'));
+        return false;
       }
-      
-      setError('Registration failed');
-      setIsLoading(false);
+
+      return await handleLogin(email, password);
+    } catch (registrationError) {
+      console.error('AuthContext registration failed:', registrationError);
+      setError('An error occurred during registration');
       return false;
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during registration');
-      }
+    } finally {
       setIsLoading(false);
-      return false;
     }
   };
 
   const handleLogout = async (): Promise<boolean> => {
+    setError(null);
     setIsLoading(true);
-    
+
     try {
-      const token = Cookies.get('authToken') || localStorage.getItem('authToken');
-      
-      if (token) {
-        const success = await logout(token);
-        
-        if (success) {
-          localStorage.removeItem('authToken');
-          Cookies.remove('authToken');
-          setUser(null);
-          setIsLoading(false);
-          return true;
-        }
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        setError('Logout failed');
+        return false;
       }
-      
-      setError('Logout failed');
-      setIsLoading(false);
-      return false;
-    } catch {
+
+      setUser(null);
+      return true;
+    } catch (logoutError) {
+      console.error('AuthContext logout failed:', logoutError);
       setError('An error occurred during logout');
-      setIsLoading(false);
       return false;
+    } finally {
+      localStorage.removeItem('authToken');
+      setIsLoading(false);
     }
   };
 
@@ -179,25 +186,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(userData);
   };
 
-  const value = {
-    user,
-    isLoading: isLoading || !isInitialized, // isInitialized false ise hala yükleniyor sayılır
-    error,
-    login: handleLogin,
-    register: handleRegister,
-    logout: handleLogout,
-    updateUserData
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading: isLoading || !isInitialized,
+        error,
+        login: handleLogin,
+        register: handleRegister,
+        logout: handleLogout,
+        updateUserData,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
   return context;
-} 
+}

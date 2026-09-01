@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { Project, ProjectKpi, ProjectStatus, Task, TaskPriority, TaskStatus } from "@/types/database";
+import { Project, ProjectKpi, ProjectStatus, Task, TaskPriority, TaskStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import {
   FiArrowLeft, FiEdit2, FiSave, FiX, FiPlus, FiTrash2,
@@ -110,12 +109,19 @@ export default function ProjectDetailPage() {
   }, [id, authHeaders, router]);
 
   const fetchStaff = useCallback(async () => {
-    const { data } = await supabase
-      .from("users")
-      .select("id, full_name")
-      .in("role", ["admin", "opportunity_manager", "sales_member"])
-      .order("full_name");
-    if (data) setStaff(data);
+    try {
+      const response = await fetch("/api/admin/users", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Failed to fetch staff");
+
+      const data = (await response.json()) as { users?: User[] };
+      const staffData = (data.users || [])
+        .filter((member) => ["admin", "opportunity_manager", "sales_member"].includes(member.role))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .map(({ id, full_name }) => ({ id, full_name }));
+      setStaff(staffData);
+    } catch {
+      toast.error("Failed to load staff");
+    }
   }, []);
 
   useEffect(() => {

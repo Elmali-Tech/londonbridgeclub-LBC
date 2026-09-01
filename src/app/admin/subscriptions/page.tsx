@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { createClient } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 import { getAssetPublicUrl } from "@/lib/storage";
 import {
@@ -50,25 +49,14 @@ export default function SubscriptionsPage() {
     if (!isAdmin) return;
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*, membership_plans(*)")
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/admin/subscriptions", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Failed to fetch subscriptions");
 
-      if (error) throw error;
-
-      const withUsers = await Promise.all(
-        (data ?? []).map(async (sub) => {
-          const { data: userData } = await supabase
-            .from("users")
-            .select("full_name, email, profile_image_key")
-            .eq("id", sub.user_id)
-            .single();
-          return { ...sub, user: userData ?? { full_name: "Unknown", email: "—" } };
-        })
+      const data = (await response.json()) as { subscriptions?: SubscriptionWithUser[] };
+      const sortedSubscriptions = [...(data.subscriptions || [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-      setSubscriptions(withUsers);
+      setSubscriptions(sortedSubscriptions);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load subscriptions");

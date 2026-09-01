@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { supabase } from "@/lib/supabase";
 import { CustomerOpportunity } from "@/types/database";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminContainer from "@/app/components/admin/AdminContainer";
@@ -160,9 +159,17 @@ export default function CustomerPoolPage() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from('users').select('id, full_name, profile_image_key');
-      if (error) throw error;
-      if (data) setUsers(data);
+      const response = await fetch("/api/admin/users", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Failed to fetch users");
+
+      const data = (await response.json()) as { users?: MentionUser[] };
+      setUsers(
+        (data.users || []).map((member: MentionUser) => ({
+          id: member.id,
+          full_name: member.full_name,
+          profile_image_key: member.profile_image_key,
+        }))
+      );
     } catch (error) {
       console.error('Error fetching users:', error);
     }

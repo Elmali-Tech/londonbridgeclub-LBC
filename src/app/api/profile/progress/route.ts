@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { validateToken } from '@/lib/auth';
+import { validateSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const currentUser = await validateToken(token);
+    const currentUser = await validateSession(request);
     if (!currentUser) {
       return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
     }
@@ -21,7 +16,7 @@ export async function GET(request: NextRequest) {
     // Get user data
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('*')
+      .select('full_name, headline, bio, location, industry, profile_image_key, banner_image_key, linkedin_url, website_url, username, date_of_birth')
       .eq('id', userId)
       .single();
 

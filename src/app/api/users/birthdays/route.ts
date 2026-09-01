@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { validateSession } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await validateSession(req);
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    const supabase = createClient();
+
     // Get today's month and day
     const today = new Date();
     const month = today.getMonth() + 1; // JavaScript months are 0-indexed
@@ -19,28 +30,29 @@ export async function GET(req: NextRequest) {
       console.error('Error fetching birthday users:', error);
       return NextResponse.json(
         { error: 'Failed to fetch birthday users' },
-        { status: 500 }
+        { status: 500, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     // Filter users whose birthday is today (month and day match)
-    const birthdayUsers = users?.filter(user => {
-      if (!user.date_of_birth) return false;
-      const birthDate = new Date(user.date_of_birth);
-      return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
-    }) || [];
+    const birthdayUsers = users
+      ?.filter(user => {
+        if (!user.date_of_birth) return false;
+        const birthDate = new Date(user.date_of_birth);
+        return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
+      })
+      .map(({ date_of_birth: _dateOfBirth, ...user }) => user) || [];
 
-    return NextResponse.json({
-      users: birthdayUsers,
-      count: birthdayUsers.length
-    });
+    return NextResponse.json(
+      { users: birthdayUsers, count: birthdayUsers.length },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
 
   } catch (error) {
     console.error('Error in birthdays API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
-

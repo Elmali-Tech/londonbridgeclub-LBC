@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { Customer, Project, ProjectStatus } from "@/types/database";
+import { Customer, Project, ProjectStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiBriefcase, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
 
@@ -97,12 +96,15 @@ export default function ProjectsPage() {
 
   const fetchStaffList = useCallback(async () => {
     try {
-      const { data } = await supabase
-        .from("users")
-        .select("id, full_name")
-        .in("role", ["admin", "opportunity_manager", "sales_member"])
-        .order("full_name", { ascending: true });
-      if (data) setStaff(data);
+      const response = await fetch("/api/admin/users", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Failed to fetch staff");
+
+      const data = (await response.json()) as { users?: User[] };
+      const staffUsers = (data.users || [])
+        .filter((member) => ["admin", "opportunity_manager", "sales_member"].includes(member.role))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .map(({ id, full_name }) => ({ id, full_name }));
+      setStaff(staffUsers);
     } catch (error) {
       console.error("Error fetching staff:", error);
     }

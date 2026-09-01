@@ -4,7 +4,6 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
 import Footer from '@/app/components/Footer';
@@ -34,43 +33,7 @@ function SuccessContent() {
 
         if (!response.ok) throw new Error('Payment verification failed');
 
-        const data = await response.json();
-
-        if (user) {
-          await supabase
-            .from('users')
-            .update({ subscription_status: 'active', stripe_customer_id: data.customer })
-            .eq('id', user.id);
-
-          if (data.subscription) {
-            const endDate = data.subscriptionDetails?.current_period_end
-              ? new Date(data.subscriptionDetails.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-            const { data: existing } = await supabase
-              .from('subscriptions')
-              .select('id')
-              .eq('user_id', user.id)
-              .single();
-
-            const subscriptionPayload = {
-              stripe_subscription_id: data.subscription,
-              stripe_customer_id: data.customer,
-              plan_id: data.planId ?? null,
-              billing_cycle: data.billingCycle ?? 'monthly',
-              status: data.subscriptionDetails?.status ?? 'active',
-              current_period_end: endDate,
-              entry_fee_paid: data.entryFeePaid ?? 0,
-              updated_at: new Date().toISOString(),
-            };
-
-            if (existing) {
-              await supabase.from('subscriptions').update(subscriptionPayload).eq('id', existing.id);
-            } else {
-              await supabase.from('subscriptions').insert({ ...subscriptionPayload, user_id: user.id });
-            }
-          }
-        }
+        await response.json();
 
         setTimeout(() => {
           router.push(user ? '/dashboard' : '/login?redirect=dashboard');

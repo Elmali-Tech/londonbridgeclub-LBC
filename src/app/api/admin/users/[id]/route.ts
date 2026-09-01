@@ -21,6 +21,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
     updates.role = role;
+    updates.is_admin = role === "admin";
   }
   if (can_publish !== undefined) {
     updates.can_publish = !!can_publish;

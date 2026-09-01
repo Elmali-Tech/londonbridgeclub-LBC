@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { createClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import type { Subscription, MembershipPlan } from '@/types/database';
 
@@ -32,16 +31,10 @@ export default function SubscriptionTab() {
     if (!user) return;
     async function fetchSubscription() {
       try {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from('subscriptions')
-          .select('*, membership_plans(*)')
-          .eq('user_id', user!.id)
-          .in('status', ['active', 'trialing', 'past_due'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        setSubscription(data ?? null);
+        const response = await fetch('/api/subscription/status', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to fetch subscription');
+        const data = await response.json();
+        setSubscription(data.subscription ?? null);
       } catch (err) {
         console.error('Failed to fetch subscription:', err);
       } finally {
@@ -52,8 +45,6 @@ export default function SubscriptionTab() {
   }, [user]);
 
   const openPortal = async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) { toast.error('Not authenticated'); return; }
     if (!user?.stripe_customer_id) {
       toast.error('No billing account found. Contact support.');
       return;
@@ -62,8 +53,6 @@ export default function SubscriptionTab() {
     try {
       const res = await fetch('/api/subscription/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
       });
       const data = await res.json();
       if (data.url) {
@@ -79,13 +68,11 @@ export default function SubscriptionTab() {
   };
 
   const handleCancel = async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
     setCancelLoading(true);
     try {
       const res = await fetch('/api/subscription/cancel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       if (res.ok) {

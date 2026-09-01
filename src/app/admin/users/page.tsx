@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { User, UserRole } from "@/types/database";
 import AdminContainer from "@/app/components/admin/AdminContainer";
 import { toast } from "react-hot-toast";
@@ -54,13 +53,14 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/admin/users", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Failed to fetch users");
 
-      if (error) throw error;
-      setUsers(data || []);
+      const data = (await response.json()) as { users?: User[] };
+      const sortedUsers = [...(data.users || [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setUsers(sortedUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast.error("Failed to fetch user directory");
@@ -212,6 +212,11 @@ export default function UsersPage() {
 
     if (memberForm.password !== memberForm.confirmPassword) {
       toast.error("Passwords do not match");
+      return;
+    }
+
+    if (memberForm.password.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
 
@@ -409,7 +414,7 @@ export default function UsersPage() {
                   value={memberForm.password}
                   onChange={handleMemberFormChange}
                   required
-                  minLength={6}
+                  minLength={12}
                   className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
               </div>
@@ -422,7 +427,7 @@ export default function UsersPage() {
                   value={memberForm.confirmPassword}
                   onChange={handleMemberFormChange}
                   required
-                  minLength={6}
+                  minLength={12}
                   className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
               </div>

@@ -1,0 +1,12 @@
+.git
+.gitignore
+.gcloudignore
+node_modules
+.next
+.DS_Store
+.env
+.env.*
+supabase/.temp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
