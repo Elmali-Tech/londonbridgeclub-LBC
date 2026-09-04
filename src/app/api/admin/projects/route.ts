@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
+import { resolveCommissionFields } from '@/lib/commission';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       customer_id, customer_opportunity_id, name, description, owner_id,
-      status, progress_percentage, start_date, end_date, revenue, commission, risks,
+      status, progress_percentage, start_date, end_date, risks,
     } = body;
 
     if (!customer_id || !name) {
@@ -56,6 +57,8 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient();
+    const commissionFields = await resolveCommissionFields(supabase, body);
+
     const { data: project, error } = await supabase
       .from('projects')
       .insert({
@@ -68,8 +71,7 @@ export async function POST(request: NextRequest) {
         progress_percentage: progress_percentage ?? 0,
         start_date: start_date || null,
         end_date: end_date || null,
-        revenue: revenue || null,
-        commission: commission || null,
+        ...commissionFields,
         risks: risks || null,
         created_by: auth.user.id,
       })

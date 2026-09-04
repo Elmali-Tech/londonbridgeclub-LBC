@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { requireAdmin, requireRole } from '@/lib/permissions';
+import { resolveCommissionFields } from '@/lib/commission';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 
@@ -15,17 +16,18 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { id } = await params;
     const supabase = createClient();
 
-    const [{ data: project, error: projectError }, { data: team }, { data: tasks }] = await Promise.all([
+    const [{ data: project, error: projectError }, { data: team }, { data: tasks }, { data: commissionShares }] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('project_team_members').select('*').eq('project_id', id).order('added_at', { ascending: true }),
       supabase.from('tasks').select('*').eq('project_id', id).order('due_date', { ascending: true }),
+      supabase.from('project_commission_shares').select('*').eq('project_id', id).order('created_at', { ascending: true }),
     ]);
 
     if (projectError || !project) {
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, project, team: team || [], tasks: tasks || [] });
+    return NextResponse.json({ success: true, project, team: team || [], tasks: tasks || [], commissionShares: commissionShares || [] });
   } catch (error) {
     console.error('GET /api/admin/projects/[id] error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
@@ -42,7 +44,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     const body = await request.json();
     const {
       customer_id, customer_opportunity_id, name, description, owner_id,
-      status, progress_percentage, start_date, end_date, revenue, commission, risks,
+      status, progress_percentage, start_date, end_date, risks,
     } = body;
 
     if (!customer_id || !name) {
@@ -50,6 +52,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
 
     const supabase = createClient();
+    const commissionFields = await resolveCommissionFields(supabase, body);
+
     const { data: project, error } = await supabase
       .from('projects')
       .update({
@@ -62,8 +66,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         progress_percentage: progress_percentage ?? 0,
         start_date: start_date || null,
         end_date: end_date || null,
-        revenue: revenue || null,
-        commission: commission || null,
+        ...commissionFields,
         risks: risks || null,
         updated_at: new Date().toISOString(),
       })
