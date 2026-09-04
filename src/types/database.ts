@@ -370,11 +370,17 @@ export interface CommissionRate {
   updated_at: string;
 }
 
+export type CommissionStatus = "Pending" | "Approved" | "Paid";
+
 export interface ProjectCommissionShare {
   id: number;
   project_id: number;
   user_id: number;
   share_percentage: number;
+  status: CommissionStatus;
+  due_date?: string | null;
+  paid_date?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }
