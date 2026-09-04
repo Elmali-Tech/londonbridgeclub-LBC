@@ -349,10 +349,32 @@ export interface Project {
   progress_percentage: number;
   start_date?: string | null;
   end_date?: string | null;
-  revenue?: string | null;
-  commission?: string | null;
+  revenue?: number | null;
+  commission_rate_id?: number | null;
+  custom_commission_rate?: number | null;
+  effective_rate?: number | null;
+  commission_amount?: number | null;
   risks?: string | null;
   created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommissionRate {
+  id: number;
+  name: string;
+  percentage: number;
+  is_active: boolean;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectCommissionShare {
+  id: number;
+  project_id: number;
+  user_id: number;
+  share_percentage: number;
   created_at: string;
   updated_at: string;
 }
