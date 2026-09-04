@@ -42,6 +42,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     const body = await request.json();
     const user_id = Number(body.user_id);
     const share_percentage = Number(body.share_percentage);
+    const due_date = body.due_date ? String(body.due_date) : null;
+    const notes = body.notes ? String(body.notes) : null;
 
     if (!Number.isFinite(user_id) || user_id <= 0) {
       return NextResponse.json({ success: false, error: 'A valid person is required' }, { status: 400 });
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { data: member, error } = await supabase
       .from('project_commission_shares')
-      .insert({ project_id: id, user_id, share_percentage })
+      .insert({ project_id: id, user_id, share_percentage, due_date, notes })
       .select()
       .single();
 
