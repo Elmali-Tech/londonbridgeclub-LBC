@@ -126,6 +126,11 @@ export default function AdminDashboardPage() {
     overdueTasks: { count: 0, items: [] as Task[] },
     totalRevenue: 0,
     totalCommission: 0,
+    pendingCommission: 0,
+    approvedCommission: 0,
+    paidCommission: 0,
+    thisMonthCommission: 0,
+    personCommission: [] as { user_id: number; name: string; amount: number }[],
     kpiAchievementRate: 0,
   });
 
@@ -202,6 +207,11 @@ export default function AdminDashboardPage() {
             overdueTasks: data.overdueTasks,
             totalRevenue: data.totalRevenue ?? 0,
             totalCommission: data.totalCommission ?? 0,
+            pendingCommission: data.pendingCommission ?? 0,
+            approvedCommission: data.approvedCommission ?? 0,
+            paidCommission: data.paidCommission ?? 0,
+            thisMonthCommission: data.thisMonthCommission ?? 0,
+            personCommission: data.personCommission ?? [],
             kpiAchievementRate: data.kpiAchievementRate ?? 0,
           });
         }
@@ -218,6 +228,9 @@ export default function AdminDashboardPage() {
     if (value >= 1_000) return `£${(value / 1_000).toFixed(0)}K`;
     return `£${value}`;
   };
+
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(value);
 
   if (isLoadingAuth || stats.isLoading) {
     return (
@@ -403,6 +416,45 @@ export default function AdminDashboardPage() {
           icon={<TargetIcon />}
           color="indigo"
         />
+      </div>
+
+      {/* Commission overview — connected to the commission system */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">Commission Overview</h2>
+          <Link href="/admin/commission-management" className="text-sm font-bold text-teal-600 hover:text-teal-700">Manage →</Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: "Total Commission", value: summary.totalCommission, color: "text-gray-900 dark:text-white" },
+            { label: "Pending", value: summary.pendingCommission, color: "text-amber-600 dark:text-amber-400" },
+            { label: "Approved", value: summary.approvedCommission, color: "text-blue-600 dark:text-blue-400" },
+            { label: "Paid", value: summary.paidCommission, color: "text-green-600 dark:text-green-400" },
+            { label: "This Month", value: summary.thisMonthCommission, color: "text-teal-600 dark:text-teal-400" },
+          ].map((c) => (
+            <div key={c.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{c.label}</p>
+              <p className={`text-2xl font-black tracking-tight ${c.color}`}>{formatMoney(c.value)}</p>
+            </div>
+          ))}
+        </div>
+
+        {summary.personCommission.length > 0 && (
+          <div className="mt-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Person-Based Commission</h3>
+            <div className="space-y-3">
+              {summary.personCommission.slice(0, 8).map((p) => (
+                <div key={p.user_id} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-xs shrink-0">
+                    {p.name?.charAt(0)?.toUpperCase() || "?"}
+                  </div>
+                  <span className="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 truncate">{p.name}</span>
+                  <span className="text-sm font-bold text-teal-600 dark:text-teal-400 tabular-nums">{formatMoney(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Upcoming Meetings + Overdue Tasks */}

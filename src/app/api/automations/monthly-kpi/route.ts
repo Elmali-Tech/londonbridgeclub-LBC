@@ -12,10 +12,10 @@ function requireCronSecret(request: NextRequest): NextResponse | null {
   return null;
 }
 
-function parseAmount(str?: string | null): number {
-  if (!str) return 0;
-  const num = parseFloat(str.replace(/[^0-9.]/g, ''));
-  return isNaN(num) ? 0 : num;
+// Numeric columns come back from Supabase as strings; coerce safely.
+function num(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 // POST - Standalone monthly KPI report: project financials, pipeline health, and completion metrics.
@@ -38,19 +38,19 @@ export async function POST(request: NextRequest) {
       { data: completedProjects },
       { data: admins },
     ] = await Promise.all([
-      supabase.from('projects').select('status, revenue, commission'),
+      supabase.from('projects').select('status, revenue, commission_amount'),
       supabase.from('customer_opportunities').select('id', { count: 'exact', head: true }),
       supabase.from('customer_opportunities').select('id', { count: 'exact', head: true }).eq('status', 'Won'),
       supabase.from('customer_opportunities').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
       getPendingApprovalsCount(),
       supabase.from('projects').select('name, status').gte('created_at', monthStart.toISOString()),
-      supabase.from('projects').select('name, revenue, commission').eq('status', 'Completed').gte('updated_at', monthStart.toISOString()),
+      supabase.from('projects').select('name, revenue, commission_amount').eq('status', 'Completed').gte('updated_at', monthStart.toISOString()),
       supabase.from('users').select('id, email, full_name').eq('role', 'admin'),
     ]);
 
     const projects = allProjects || [];
-    const totalRevenue = projects.reduce((sum, p) => sum + parseAmount(p.revenue), 0);
-    const totalCommission = projects.reduce((sum, p) => sum + parseAmount(p.commission), 0);
+    const totalRevenue = projects.reduce((sum, p) => sum + num(p.revenue), 0);
+    const totalCommission = projects.reduce((sum, p) => sum + num(p.commission_amount), 0);
     const completionRate = projects.length
       ? Math.round((projects.filter((p) => p.status === 'Completed').length / projects.length) * 100)
       : 0;
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       newProjectsThisMonth: (newProjects || []).map((p) => ({ name: p.name, status: p.status })),
       completedProjectsThisMonth: (completedProjects || []).map((p) => ({
         name: p.name,
-        revenue: p.revenue,
-        commission: p.commission,
+        revenue: p.revenue != null ? `£${num(p.revenue).toLocaleString('en-GB')}` : null,
+        commission: p.commission_amount != null ? `£${num(p.commission_amount).toLocaleString('en-GB')}` : null,
       })),
     };
 
