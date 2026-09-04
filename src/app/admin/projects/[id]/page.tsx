@@ -13,7 +13,13 @@ import {
 
 type Tab = "overview" | "timeline" | "tasks" | "kpis" | "team" | "commission";
 type TeamMember = { id: number; user_id: number; full_name: string; added_at: string };
-type CommissionShare = { id: number; user_id: number; share_percentage: number };
+type CommissionShare = { id: number; user_id: number; share_percentage: number; status?: "Pending" | "Approved" | "Paid" };
+
+const SHARE_STATUS_BADGE: Record<string, string> = {
+  Pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  Approved: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  Paid: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+};
 type StaffOption = { id: number; full_name: string };
 
 const gbp = (n: number) =>
@@ -916,7 +922,10 @@ export default function ProjectDetailPage() {
                         {getStaffName(share.user_id)?.charAt(0)?.toUpperCase() || "?"}
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">{getStaffName(share.user_id) || `User #${share.user_id}`}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          {getStaffName(share.user_id) || `User #${share.user_id}`}
+                          {share.status && <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${SHARE_STATUS_BADGE[share.status] || ""}`}>{share.status}</span>}
+                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{Number(share.share_percentage)}% of commission</p>
                       </div>
                     </div>
