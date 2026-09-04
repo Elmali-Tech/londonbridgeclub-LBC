@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Customer, Project, ProjectStatus, User } from "@/types/database";
+import { CommissionRate, Customer, Project, ProjectStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import { FiBriefcase, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
 
@@ -21,9 +21,13 @@ const emptyForm = {
   start_date: "",
   end_date: "",
   revenue: "",
-  commission: "",
+  rate_choice: "" as string, // "" | "custom" | "<rate id>"
+  custom_commission_rate: "",
   risks: "",
 };
+
+const gbp = (n: number) =>
+  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(n);
 
 const STATUS_TABS: { label: string; value: ProjectStatus | "all" }[] = [
   { label: "All", value: "all" },
@@ -46,6 +50,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectWithCount[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [rates, setRates] = useState<CommissionRate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusTab, setStatusTab] = useState<ProjectStatus | "all">("all");
@@ -94,6 +99,16 @@ export default function ProjectsPage() {
     }
   }, []);
 
+  const fetchRates = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/commission-rates?active=true", { headers: authHeaders() });
+      const data = await response.json();
+      if (data.success) setRates(data.rates || []);
+    } catch (error) {
+      console.error("Error fetching commission rates:", error);
+    }
+  }, []);
+
   const fetchStaffList = useCallback(async () => {
     try {
       const response = await fetch("/api/admin/users", { credentials: "same-origin" });
@@ -110,11 +125,25 @@ export default function ProjectsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchProjects(); fetchCustomers(); fetchStaffList(); }, [fetchProjects, fetchCustomers, fetchStaffList]);
+  useEffect(() => { fetchProjects(); fetchCustomers(); fetchStaffList(); fetchRates(); }, [fetchProjects, fetchCustomers, fetchStaffList, fetchRates]);
 
   const getCustomerName = (id: number) => customers.find((c) => c.id === id)?.company_name || "Unknown";
   const getOwnerName = (id?: number | null) => staff.find((s) => s.id === id)?.full_name;
   const filteredProjects = projects.filter((p) => statusTab === "all" || p.status === statusTab);
+
+  // Live commission calculation for the create form.
+  const selectedRate = rates.find((r) => String(r.id) === formData.rate_choice);
+  const effectiveRate =
+    formData.rate_choice === "custom"
+      ? (formData.custom_commission_rate === "" ? null : Number(formData.custom_commission_rate))
+      : selectedRate
+        ? Number(selectedRate.percentage)
+        : null;
+  const revenueNum = formData.revenue === "" ? null : Number(formData.revenue);
+  const commissionAmount =
+    revenueNum !== null && Number.isFinite(revenueNum) && effectiveRate !== null && Number.isFinite(effectiveRate)
+      ? Math.round(revenueNum * effectiveRate) / 100
+      : null;
 
   const resetForm = () => {
     setFormData(emptyForm);
@@ -133,10 +162,17 @@ export default function ProjectsPage() {
     }
     try {
       setIsSubmitting(true);
+      const { rate_choice, custom_commission_rate, ...rest } = formData;
+      const payload = {
+        ...rest,
+        revenue: formData.revenue === "" ? null : Number(formData.revenue),
+        commission_rate_id: rate_choice && rate_choice !== "custom" ? Number(rate_choice) : null,
+        custom_commission_rate: rate_choice === "custom" && custom_commission_rate !== "" ? Number(custom_commission_rate) : null,
+      };
       const response = await fetch("/api/admin/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.error);
@@ -245,12 +281,31 @@ export default function ProjectsPage() {
               <input type="date" value={formData.end_date} onChange={(e) => setFormData((p) => ({ ...p, end_date: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Revenue</label>
-              <input value={formData.revenue} onChange={(e) => setFormData((p) => ({ ...p, revenue: e.target.value }))} placeholder="E.g. £50,000" className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Revenue (£)</label>
+              <input type="number" min={0} step="0.01" value={formData.revenue} onChange={(e) => setFormData((p) => ({ ...p, revenue: e.target.value }))} placeholder="E.g. 50000" className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Commission</label>
-              <input value={formData.commission} onChange={(e) => setFormData((p) => ({ ...p, commission: e.target.value }))} placeholder="E.g. £5,000" className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Commission Rate</label>
+              <select value={formData.rate_choice} onChange={(e) => setFormData((p) => ({ ...p, rate_choice: e.target.value }))} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20">
+                <option value="">No commission</option>
+                {rates.map((r) => <option key={r.id} value={r.id}>{r.name} ({Number(r.percentage)}%)</option>)}
+                <option value="custom">Custom rate…</option>
+              </select>
+            </div>
+            {formData.rate_choice === "custom" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Custom Rate (%)</label>
+                <input type="number" min={0} max={100} step="0.01" value={formData.custom_commission_rate} onChange={(e) => setFormData((p) => ({ ...p, custom_commission_rate: e.target.value }))} placeholder="E.g. 7.5" className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Commission Amount</label>
+              <div className="w-full rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-sm font-bold text-teal-600 dark:text-teal-400">
+                {commissionAmount !== null ? gbp(commissionAmount) : "—"}
+                {effectiveRate !== null && revenueNum !== null && (
+                  <span className="ml-2 font-normal text-xs text-gray-400">= {gbp(revenueNum)} × {effectiveRate}%</span>
+                )}
+              </div>
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Progress: {formData.progress_percentage}%</label>

@@ -4,16 +4,20 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Project, ProjectKpi, ProjectStatus, Task, TaskPriority, TaskStatus, User } from "@/types/database";
+import { CommissionRate, Project, ProjectKpi, ProjectStatus, Task, TaskPriority, TaskStatus, User } from "@/types/database";
 import { toast } from "react-hot-toast";
 import {
   FiArrowLeft, FiEdit2, FiSave, FiX, FiPlus, FiTrash2,
-  FiUsers, FiCheckSquare, FiBarChart2, FiCalendar, FiInfo,
+  FiUsers, FiCheckSquare, FiBarChart2, FiCalendar, FiInfo, FiDollarSign,
 } from "react-icons/fi";
 
-type Tab = "overview" | "timeline" | "tasks" | "kpis" | "team";
+type Tab = "overview" | "timeline" | "tasks" | "kpis" | "team" | "commission";
 type TeamMember = { id: number; user_id: number; full_name: string; added_at: string };
+type CommissionShare = { id: number; user_id: number; share_percentage: number };
 type StaffOption = { id: number; full_name: string };
+
+const gbp = (n: number) =>
+  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(n);
 
 const STATUS_BADGE: Record<ProjectStatus, string> = {
   Planning: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -43,6 +47,7 @@ export default function ProjectDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [kpis, setKpis] = useState<ProjectKpi[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [rates, setRates] = useState<CommissionRate[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -50,7 +55,17 @@ export default function ProjectDetailPage() {
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Project>>({});
+  // Commission editing is held as strings (rate_choice: "" | "custom" | "<id>").
+  const [editRevenue, setEditRevenue] = useState("");
+  const [editRateChoice, setEditRateChoice] = useState("");
+  const [editCustomRate, setEditCustomRate] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Commission shares
+  const [shares, setShares] = useState<CommissionShare[]>([]);
+  const [addingShare, setAddingShare] = useState(false);
+  const [shareUser, setShareUser] = useState<number | "">("");
+  const [sharePct, setSharePct] = useState("");
 
   // KPI form
   const [kpiForm, setKpiForm] = useState({ name: "", target: "", actual: "", unit: "" });
@@ -77,6 +92,18 @@ export default function ProjectDetailPage() {
     return { Authorization: `Bearer ${token}` };
   }, []);
 
+  // Derive the string-based commission edit fields from a project record.
+  const syncCommissionState = useCallback((p: Partial<Project>) => {
+    setEditRevenue(p.revenue == null ? "" : String(p.revenue));
+    if (p.custom_commission_rate != null) {
+      setEditRateChoice("custom");
+      setEditCustomRate(String(p.custom_commission_rate));
+    } else {
+      setEditRateChoice(p.commission_rate_id != null ? String(p.commission_rate_id) : "");
+      setEditCustomRate("");
+    }
+  }, []);
+
   const fetchAll = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -92,7 +119,9 @@ export default function ProjectDetailPage() {
       setProject(projectData.project);
       setTeam(projectData.team || []);
       setTasks(projectData.tasks || []);
+      setShares(projectData.commissionShares || []);
       setEditForm(projectData.project);
+      syncCommissionState(projectData.project);
       setKpis(kpisData.kpis || []);
 
       // Fetch customer name
@@ -106,7 +135,7 @@ export default function ProjectDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [id, authHeaders, router]);
+  }, [id, authHeaders, router, syncCommissionState]);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -124,25 +153,43 @@ export default function ProjectDetailPage() {
     }
   }, []);
 
+  const fetchRates = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/commission-rates?active=true", { headers: authHeaders() });
+      const data = await response.json();
+      if (data.success) setRates(data.rates || []);
+    } catch {
+      // Non-fatal — the rate dropdown just stays empty.
+    }
+  }, [authHeaders]);
+
   useEffect(() => {
     if (!isLoadingAuth && !hasAccess && user) router.push("/admin");
   }, [hasAccess, isLoadingAuth, router, user]);
 
-  useEffect(() => { fetchAll(); fetchStaff(); }, [fetchAll, fetchStaff]);
+  useEffect(() => { fetchAll(); fetchStaff(); fetchRates(); }, [fetchAll, fetchStaff, fetchRates]);
 
   // ── Save project edits ──
   const handleSave = async () => {
     if (!editForm.name?.trim() || !editForm.customer_id) { toast.error("Name and customer are required"); return; }
     try {
       setIsSaving(true);
+      const payload = {
+        ...editForm,
+        revenue: editRevenue === "" ? null : Number(editRevenue),
+        commission_rate_id: editRateChoice && editRateChoice !== "custom" ? Number(editRateChoice) : null,
+        custom_commission_rate: editRateChoice === "custom" && editCustomRate !== "" ? Number(editCustomRate) : null,
+      };
       const res = await fetch(`/api/admin/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setProject(data.project);
+      setEditForm(data.project);
+      syncCommissionState(data.project);
       setIsEditing(false);
       toast.success("Project saved");
     } catch { toast.error("Failed to save"); }
@@ -263,6 +310,32 @@ export default function ProjectDetailPage() {
     else toast.error("Failed to remove member");
   };
 
+  // ── Commission share handlers ──
+  const handleAddShare = async () => {
+    if (!shareUser || sharePct === "") { toast.error("Select a person and a share %"); return; }
+    const res = await fetch(`/api/admin/projects/${id}/commission-shares`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ user_id: shareUser, share_percentage: Number(sharePct) }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setShares([...shares, data.share]);
+      setShareUser("");
+      setSharePct("");
+      setAddingShare(false);
+      toast.success("Commission share added");
+    } else toast.error(data.error || "Failed to add share");
+  };
+
+  const handleRemoveShare = async (share: CommissionShare) => {
+    if (!confirm("Remove this person's commission share?")) return;
+    const res = await fetch(`/api/admin/projects/${id}/commission-shares/${share.user_id}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json();
+    if (data.success) setShares(shares.filter((s) => s.id !== share.id));
+    else toast.error("Failed to remove share");
+  };
+
   // ── Timeline helpers ──
   const getTimelinePercent = () => {
     if (!project?.start_date || !project?.end_date) return null;
@@ -288,12 +361,39 @@ export default function ProjectDetailPage() {
   const timelinePercent = getTimelinePercent();
   const availableToAdd = staff.filter((s) => !team.some((m) => m.user_id === s.id));
 
+  // Live commission calc for the edit form.
+  const editSelectedRate = rates.find((r) => String(r.id) === editRateChoice);
+  const editEffectiveRate =
+    editRateChoice === "custom"
+      ? (editCustomRate === "" ? null : Number(editCustomRate))
+      : editSelectedRate ? Number(editSelectedRate.percentage) : null;
+  const editRevenueNum = editRevenue === "" ? null : Number(editRevenue);
+  const editCommissionAmount =
+    editRevenueNum !== null && Number.isFinite(editRevenueNum) && editEffectiveRate !== null && Number.isFinite(editEffectiveRate)
+      ? Math.round(editRevenueNum * editEffectiveRate) / 100
+      : null;
+
+  // Commission rate label for the read-only overview.
+  const projectRateLabel = (() => {
+    if (project.effective_rate == null) return "—";
+    if (project.custom_commission_rate != null) return `${Number(project.effective_rate)}% (custom)`;
+    const r = rates.find((rr) => rr.id === project.commission_rate_id);
+    return r ? `${Number(project.effective_rate)}% (${r.name})` : `${Number(project.effective_rate)}%`;
+  })();
+
+  // Commission shares: totals and remaining allocation.
+  const totalCommission = project.commission_amount != null ? Number(project.commission_amount) : null;
+  const totalSharePct = shares.reduce((sum, s) => sum + Number(s.share_percentage), 0);
+  const remainingPct = Math.round((100 - totalSharePct) * 100) / 100;
+  const availableForShares = staff.filter((s) => !shares.some((sh) => sh.user_id === s.id));
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "Overview", icon: <FiInfo /> },
     { key: "timeline", label: "Timeline", icon: <FiCalendar /> },
     { key: "tasks", label: `Tasks (${tasks.length})`, icon: <FiCheckSquare /> },
     { key: "kpis", label: `KPIs (${kpis.length})`, icon: <FiBarChart2 /> },
     { key: "team", label: `Team (${team.length})`, icon: <FiUsers /> },
+    { key: "commission", label: `Commission (${shares.length})`, icon: <FiDollarSign /> },
   ];
 
   return (
@@ -387,12 +487,35 @@ export default function ProjectDetailPage() {
                   <input type="date" value={editForm.end_date || ""} onChange={(e) => setEditForm((p) => ({ ...p, end_date: e.target.value }))} className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Revenue</label>
-                  <input value={editForm.revenue || ""} onChange={(e) => setEditForm((p) => ({ ...p, revenue: e.target.value }))} placeholder="e.g. £50,000" className={inputCls} />
+                  <label className={labelCls}>Revenue (£)</label>
+                  <input type="number" min={0} step="0.01" value={editRevenue} onChange={(e) => setEditRevenue(e.target.value)} placeholder="e.g. 50000" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Commission</label>
-                  <input value={editForm.commission || ""} onChange={(e) => setEditForm((p) => ({ ...p, commission: e.target.value }))} placeholder="e.g. £5,000" className={inputCls} />
+                  <label className={labelCls}>Commission Rate</label>
+                  <select value={editRateChoice} onChange={(e) => setEditRateChoice(e.target.value)} className={inputCls}>
+                    <option value="">No commission</option>
+                    {rates.map((r) => <option key={r.id} value={r.id}>{r.name} ({Number(r.percentage)}%)</option>)}
+                    {/* Keep the currently-selected rate visible even if it was since deactivated */}
+                    {project.commission_rate_id != null && !rates.some((r) => r.id === project.commission_rate_id) && editRateChoice === String(project.commission_rate_id) && (
+                      <option value={project.commission_rate_id}>{`Rate #${project.commission_rate_id} (${Number(project.effective_rate)}%, inactive)`}</option>
+                    )}
+                    <option value="custom">Custom rate…</option>
+                  </select>
+                </div>
+                {editRateChoice === "custom" && (
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Custom Rate (%)</label>
+                    <input type="number" min={0} max={100} step="0.01" value={editCustomRate} onChange={(e) => setEditCustomRate(e.target.value)} placeholder="e.g. 7.5" className={inputCls} />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Commission Amount</label>
+                  <div className="w-full rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-sm font-bold text-teal-600 dark:text-teal-400">
+                    {editCommissionAmount !== null ? gbp(editCommissionAmount) : "—"}
+                    {editEffectiveRate !== null && editRevenueNum !== null && (
+                      <span className="ml-2 font-normal text-xs text-gray-400">= {gbp(editRevenueNum)} × {editEffectiveRate}%</span>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className={labelCls}>Progress: {editForm.progress_percentage ?? 0}%</label>
@@ -422,8 +545,9 @@ export default function ProjectDetailPage() {
                   <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Owner</span><span className="font-semibold">{getStaffName(project.owner_id) || "Unassigned"}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Start</span><span className="font-semibold">{formatDate(project.start_date)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">End</span><span className="font-semibold">{formatDate(project.end_date)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Revenue</span><span className="font-semibold text-green-600 dark:text-green-400">{project.revenue || "—"}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Commission</span><span className="font-semibold text-teal-600 dark:text-teal-400">{project.commission || "—"}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Revenue</span><span className="font-semibold text-green-600 dark:text-green-400">{project.revenue != null ? gbp(Number(project.revenue)) : "—"}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Commission Rate</span><span className="font-semibold text-gray-700 dark:text-gray-300">{projectRateLabel}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Commission</span><span className="font-semibold text-teal-600 dark:text-teal-400">{project.commission_amount != null ? gbp(Number(project.commission_amount)) : "—"}</span></div>
                 </div>
               </div>
               <div className="space-y-4">
@@ -727,6 +851,84 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── COMMISSION TAB ── */}
+      {activeTab === "commission" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Commission Distribution</h3>
+            {canEdit && availableForShares.length > 0 && (
+              <button onClick={() => setAddingShare(!addingShare)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors"><FiPlus /> Add Person</button>
+            )}
+          </div>
+
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+              <p className="text-xl font-black text-gray-900 dark:text-white">{totalCommission != null ? gbp(totalCommission) : "—"}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Commission</p>
+            </div>
+            <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+              <p className="text-xl font-black text-gray-900 dark:text-white">{totalSharePct}%</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Allocated</p>
+            </div>
+            <div className={`text-center p-4 rounded-xl ${remainingPct < 0 ? "bg-red-50 dark:bg-red-900/10" : "bg-gray-50 dark:bg-gray-800"}`}>
+              <p className={`text-xl font-black ${remainingPct < 0 ? "text-red-600" : "text-gray-900 dark:text-white"}`}>{remainingPct}%</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Remaining</p>
+            </div>
+          </div>
+
+          {totalCommission == null && (
+            <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/10 rounded-xl px-4 py-3">
+              Set a revenue and commission rate on the Overview tab to see each person&apos;s £ amount.
+            </div>
+          )}
+
+          {addingShare && (
+            <div className="flex flex-wrap gap-3">
+              <select value={shareUser} onChange={(e) => setShareUser(e.target.value ? Number(e.target.value) : "")} className={`flex-1 min-w-[200px] ${inputCls}`}>
+                <option value="">Select a person…</option>
+                {availableForShares.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+              </select>
+              <input type="number" min={0} max={100} step="0.01" value={sharePct} onChange={(e) => setSharePct(e.target.value)} placeholder={`Share % (max ${Math.max(0, remainingPct)})`} className={`w-40 ${inputCls}`} />
+              <button onClick={handleAddShare} disabled={!shareUser || sharePct === ""} className="px-5 py-2 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">Add</button>
+              <button onClick={() => { setAddingShare(false); setShareUser(""); setSharePct(""); }} className="px-5 py-2 border border-gray-200 dark:border-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+            </div>
+          )}
+
+          {shares.length === 0 ? (
+            <div className="py-16 text-center bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+              <FiDollarSign className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-700 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No commission shares yet.</p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
+              {shares.map((share) => {
+                const amount = totalCommission != null ? Math.round(totalCommission * Number(share.share_percentage)) / 100 : null;
+                return (
+                  <div key={share.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-sm">
+                        {getStaffName(share.user_id)?.charAt(0)?.toUpperCase() || "?"}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white">{getStaffName(share.user_id) || `User #${share.user_id}`}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{Number(share.share_percentage)}% of commission</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-teal-600 dark:text-teal-400 tabular-nums">{amount != null ? gbp(amount) : "—"}</span>
+                      {isAdmin && (
+                        <button onClick={() => handleRemoveShare(share)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
