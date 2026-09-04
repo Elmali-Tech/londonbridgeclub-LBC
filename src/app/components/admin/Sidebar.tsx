@@ -209,6 +209,14 @@ const TokenIcon = () => (
   </svg>
 );
 
+const CommissionIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="5" x2="5" y2="19"></line>
+    <circle cx="6.5" cy="6.5" r="2.5"></circle>
+    <circle cx="17.5" cy="17.5" r="2.5"></circle>
+  </svg>
+);
+
 interface SidebarProps {
   isCollapsed?: boolean;
   toggleCollapse?: () => void;
@@ -367,6 +375,12 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           name: "Register Tokens",
           href: "/admin/register-tokens",
           icon: TokenIcon,
+          roles: ["admin"],
+        },
+        {
+          name: "Commission Rates",
+          href: "/admin/commission-rates",
+          icon: CommissionIcon,
           roles: ["admin"],
         },
         {
