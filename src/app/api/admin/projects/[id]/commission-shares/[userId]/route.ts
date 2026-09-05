@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
+import { canManageProjectCommission } from '@/lib/commission';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 const STATUSES = ['Pending', 'Approved', 'Paid'] as const;
@@ -15,6 +16,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id, userId } = await params;
+
+    // §7: only admins and in-scope opportunity managers may change commission data.
+    const supabaseAuthz = createClient();
+    if (!(await canManageProjectCommission(supabaseAuthz, auth.user, id))) {
+      return NextResponse.json({ success: false, error: 'You do not have permission to manage this project’s commission' }, { status: 403 });
+    }
+
     const body = await request.json();
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -68,6 +76,19 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (body.notes !== undefined) update.notes = body.notes ? String(body.notes) : null;
 
     const supabase = createClient();
+
+    // Read the row before the update so we can (a) 404 cleanly and (b) tell whether
+    // this call is the Pending/Approved → Paid transition that should log a payment.
+    const { data: before } = await supabase
+      .from('project_commission_shares')
+      .select('status')
+      .eq('project_id', id)
+      .eq('user_id', userId)
+      .single();
+    if (!before) {
+      return NextResponse.json({ success: false, error: 'Commission share not found' }, { status: 404 });
+    }
+
     const { data, error } = await supabase
       .from('project_commission_shares')
       .update(update)
@@ -82,6 +103,30 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
     if (!data) {
       return NextResponse.json({ success: false, error: 'Commission share not found' }, { status: 404 });
+    }
+
+    // §8 audit trail: when a share first becomes Paid, record an immutable payment
+    // row (who paid, how much, when). The £ amount is computed on the server from
+    // the project's commission and this person's share — never trusted from input.
+    if (data.status === 'Paid' && before.status !== 'Paid') {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('commission_amount')
+        .eq('id', id)
+        .single();
+      const projectCommission = project ? Number(project.commission_amount) || 0 : 0;
+      const amount = Math.round(projectCommission * Number(data.share_percentage)) / 100;
+      const { error: payError } = await supabase.from('commission_payments').insert({
+        commission_share_id: data.id,
+        project_id: Number(id),
+        user_id: Number(userId),
+        amount,
+        paid_date: data.paid_date,
+        recorded_by: auth.user.id,
+      });
+      // Non-fatal: the share is already marked Paid; a failed audit insert is logged,
+      // not surfaced, so a missing payments table can't block the payment flow.
+      if (payError) console.error('Error recording commission payment:', payError);
     }
 
     return NextResponse.json({ success: true, share: data });
@@ -99,6 +144,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     const { id, userId } = await params;
     const supabase = createClient();
+
+    // §7: only admins and in-scope opportunity managers may delete commission data.
+    if (!(await canManageProjectCommission(supabase, auth.user, id))) {
+      return NextResponse.json({ success: false, error: 'You do not have permission to manage this project’s commission' }, { status: 403 });
+    }
+
     const { error } = await supabase
       .from('project_commission_shares')
       .delete()
