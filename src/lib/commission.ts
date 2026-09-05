@@ -1,4 +1,59 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { User } from '@/types/database';
+import { isAdmin } from '@/lib/permissions';
+
+/**
+ * What slice of the commission data a user is allowed to see (§7 Permissions):
+ *  - admin              → everything.
+ *  - opportunity_manager → only projects they own or created (their authorized scope).
+ *  - sales_member        → only commission shares assigned to them.
+ *  - viewer / everyone else is rejected before this is ever computed.
+ */
+export type CommissionScope =
+  | { kind: 'all' }
+  | { kind: 'projects'; projectIds: number[] }
+  | { kind: 'self'; userId: number };
+
+/** Resolve the caller's commission read scope. Requires a DB round-trip for managers. */
+export async function getCommissionScope(
+  supabase: SupabaseClient,
+  user: Pick<User, 'id' | 'role' | 'is_admin'>,
+): Promise<CommissionScope> {
+  if (isAdmin(user)) return { kind: 'all' };
+
+  if (user.role === 'opportunity_manager') {
+    const { data } = await supabase
+      .from('projects')
+      .select('id')
+      .or(`owner_id.eq.${user.id},created_by.eq.${user.id}`);
+    return { kind: 'projects', projectIds: (data ?? []).map((p) => Number(p.id)) };
+  }
+
+  // sales_member (and any other CRM role) sees only their own shares.
+  return { kind: 'self', userId: Number(user.id) };
+}
+
+/**
+ * Can this user create/approve/pay/edit/delete commission data on `projectId`?
+ * Sales members are read-only; opportunity managers may only manage projects
+ * within their scope; admins may manage anything. Returns false on any doubt.
+ */
+export async function canManageProjectCommission(
+  supabase: SupabaseClient,
+  user: Pick<User, 'id' | 'role' | 'is_admin'>,
+  projectId: number | string,
+): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (user.role !== 'opportunity_manager') return false;
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('owner_id, created_by')
+    .eq('id', projectId)
+    .single();
+  if (!project) return false;
+  return Number(project.owner_id) === Number(user.id) || Number(project.created_by) === Number(user.id);
+}
 
 export type CommissionInput = {
   revenue?: unknown;
