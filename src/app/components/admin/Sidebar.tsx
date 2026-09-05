@@ -394,7 +394,7 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
           name: "Commission Management",
           href: "/admin/commission-management",
           icon: CommissionMgmtIcon,
-          roles: ["admin", "opportunity_manager"],
+          roles: ["admin", "opportunity_manager", "sales_member"],
         },
         {
           name: "Settings",

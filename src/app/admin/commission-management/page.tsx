@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { CommissionStatus } from "@/types/database";
 import { toast } from "react-hot-toast";
-import { FiPercent, FiCheck, FiDollarSign, FiEdit2, FiFilter, FiX } from "react-icons/fi";
+import { FiPercent, FiCheck, FiDollarSign, FiEdit2, FiFilter, FiX, FiDownload } from "react-icons/fi";
 
 type Commission = {
   id: number;
@@ -44,7 +44,10 @@ export default function CommissionManagementPage() {
   const router = useRouter();
 
   const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
-  const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
+  // Sales members get a read-only view of their own commissions; admins and
+  // opportunity managers can approve, pay and edit within their scope (§7).
+  const hasAccess = userRole === "admin" || userRole === "opportunity_manager" || userRole === "sales_member";
+  const canManage = userRole === "admin" || userRole === "opportunity_manager";
 
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -140,6 +143,24 @@ export default function CommissionManagementPage() {
     }
   };
 
+  // Export the currently-filtered commissions as a CSV payout report.
+  const exportCsv = () => {
+    if (commissions.length === 0) { toast.error("Nothing to export"); return; }
+    const headers = ["Project", "Customer", "Person", "Share %", "Amount (GBP)", "Status", "Due", "Paid", "Notes"];
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = commissions.map((c) => [
+      c.project_name, c.customer_name, c.user_name, c.share_percentage,
+      c.amount.toFixed(2), c.status, c.due_date || "", c.paid_date || "", c.notes || "",
+    ].map(esc).join(","));
+    const csv = [headers.map(esc).join(","), ...rows].join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `commissions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Summary over the currently-loaded (filtered) commissions.
   const sumBy = (pred: (c: Commission) => boolean) =>
     commissions.filter(pred).reduce((s, c) => s + c.amount, 0);
@@ -193,11 +214,15 @@ export default function CommissionManagementPage() {
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Commission Management</h1>
-          <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">Review, approve, and pay commissions across all projects.</p>
+          <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">
+            {canManage ? "Review, approve, and pay commissions across your projects." : "Your commissions across all projects."}
+          </p>
         </div>
-        <Link href="/admin/commission-rates" className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-          <FiPercent /> Manage Rates
-        </Link>
+        {userRole === "admin" && (
+          <Link href="/admin/commission-rates" className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <FiPercent /> Manage Rates
+          </Link>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -234,6 +259,7 @@ export default function CommissionManagementPage() {
           {hasFilters && (
             <button onClick={() => setFilters(emptyFilters)} className="inline-flex items-center gap-1 px-3 py-2 text-sm font-bold text-gray-500 hover:text-red-600 rounded-xl"><FiX className="w-4 h-4" /> Clear</button>
           )}
+          <button onClick={exportCsv} className="inline-flex items-center gap-1 px-3 py-2 ml-auto text-sm font-bold text-gray-500 hover:text-teal-600 rounded-xl"><FiDownload className="w-4 h-4" /> Export CSV</button>
         </div>
       </div>
 
@@ -287,16 +313,22 @@ export default function CommissionManagementPage() {
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmtDate(c.paid_date)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
-                        {c.status === "Pending" && (
-                          <button onClick={() => approve(c)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg"><FiCheck className="w-3.5 h-3.5" /> Approve</button>
+                        {canManage ? (
+                          <>
+                            {c.status === "Pending" && (
+                              <button onClick={() => approve(c)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg"><FiCheck className="w-3.5 h-3.5" /> Approve</button>
+                            )}
+                            {c.status === "Approved" && (
+                              <button onClick={() => markPaid(c)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 rounded-lg"><FiDollarSign className="w-3.5 h-3.5" /> Mark Paid</button>
+                            )}
+                            {c.status === "Paid" && (
+                              <button onClick={() => revertToPending(c)} className="px-2.5 py-1.5 text-xs font-bold text-gray-500 hover:text-amber-600 rounded-lg">Revert</button>
+                            )}
+                            <button onClick={() => openEdit(c)} title="Edit due date / notes" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg"><FiEdit2 className="w-3.5 h-3.5" /></button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
                         )}
-                        {c.status === "Approved" && (
-                          <button onClick={() => markPaid(c)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 rounded-lg"><FiDollarSign className="w-3.5 h-3.5" /> Mark Paid</button>
-                        )}
-                        {c.status === "Paid" && (
-                          <button onClick={() => revertToPending(c)} className="px-2.5 py-1.5 text-xs font-bold text-gray-500 hover:text-amber-600 rounded-lg">Revert</button>
-                        )}
-                        <button onClick={() => openEdit(c)} title="Edit due date / notes" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg"><FiEdit2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
