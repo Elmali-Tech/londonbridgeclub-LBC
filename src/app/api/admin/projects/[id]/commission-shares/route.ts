@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
+import { canManageProjectCommission, getCommissionScope } from '@/lib/commission';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 
 type Params = { params: Promise<{ id: string }> };
 
-// GET - Commission shares for a project.
+// GET - Commission shares for a project, scoped to what the caller may see (§7).
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     const auth = await requireRole(request, [...CRM_ROLES]);
@@ -14,11 +15,22 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const supabase = createClient();
-    const { data, error } = await supabase
+
+    // Enforce read scope: managers only for their own projects, sales members
+    // only their own share within the project.
+    const scope = await getCommissionScope(supabase, auth.user);
+    if (scope.kind === 'projects' && !scope.projectIds.includes(Number(id))) {
+      return NextResponse.json({ success: true, shares: [] });
+    }
+
+    let sharesQuery = supabase
       .from('project_commission_shares')
       .select('*')
       .eq('project_id', id)
       .order('created_at', { ascending: true });
+    if (scope.kind === 'self') sharesQuery = sharesQuery.eq('user_id', scope.userId);
+
+    const { data, error } = await sharesQuery;
 
     if (error) {
       console.error('GET /api/admin/projects/[id]/commission-shares error:', error);
@@ -39,6 +51,11 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (auth.response) return auth.response;
 
     const { id } = await params;
+    const supabaseAuthz = createClient();
+    if (!(await canManageProjectCommission(supabaseAuthz, auth.user, id))) {
+      return NextResponse.json({ success: false, error: 'You do not have permission to manage this project’s commission' }, { status: 403 });
+    }
+
     const body = await request.json();
     const user_id = Number(body.user_id);
     const share_percentage = Number(body.share_percentage);

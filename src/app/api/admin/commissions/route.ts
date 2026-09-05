@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { requireRole } from '@/lib/permissions';
+import { getCommissionScope } from '@/lib/commission';
 
 const CRM_ROLES = ['admin', 'opportunity_manager', 'sales_member'] as const;
 
@@ -25,7 +26,16 @@ export async function GET(request: NextRequest) {
     const to = sp.get('to');
 
     const supabase = createClient();
+
+    // §7: restrict the rows this caller is allowed to see before any other filter.
+    const scope = await getCommissionScope(supabase, auth.user);
+    if (scope.kind === 'projects' && scope.projectIds.length === 0) {
+      return NextResponse.json({ success: true, commissions: [] });
+    }
+
     let query = supabase.from('project_commission_shares').select('*').order('created_at', { ascending: false });
+    if (scope.kind === 'projects') query = query.in('project_id', scope.projectIds);
+    if (scope.kind === 'self') query = query.eq('user_id', scope.userId);
     if (status) query = query.eq('status', status);
     if (projectId) query = query.eq('project_id', Number(projectId));
     if (userId) query = query.eq('user_id', Number(userId));
