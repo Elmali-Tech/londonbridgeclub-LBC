@@ -1,5 +1,6 @@
 "use client";
 
+import { getEffectiveRole } from "@/lib/accountAccess";
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -198,7 +199,7 @@ export default function KPIDashboardPage() {
     );
   }
 
-  const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
+  const userRole = getEffectiveRole(user);
   const isViewer = userRole === "viewer";
   const hasAccess = [
     "admin",

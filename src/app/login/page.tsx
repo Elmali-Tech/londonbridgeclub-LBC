@@ -7,7 +7,8 @@ import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
 import CookieConsentModal from "@/app/components/CookieConsentModal";
-import { fetchSubscriptionStatus } from "@/lib/subscriptionUtils";
+import { fetchAccountAccess } from "@/lib/subscriptionUtils";
+import { getLoginDestination, hasAdminConsoleAccess } from "@/lib/accountAccess";
 import ForgotPasswordModal from "../components/ForgotPasswordModal";
 
 export default function Login() {
@@ -53,27 +54,26 @@ export default function Login() {
     }
   }, []);
 
-  // Check subscription status after successful login
+  // Staff and admin-managed members do not need a paid subscription to sign in.
   useEffect(() => {
     const checkSubscriptionAndRedirect = async () => {
       if (loginSuccess && user?.id) {
-        if (!user.is_approved && user.role !== 'admin') {
+        if (!user.is_approved && user.role !== 'admin' && !user.is_admin) {
           setFormError("Your account is currently pending approval. You will receive an email once it's approved.");
           setLoginSuccess(false);
           return;
         }
         
         try {
-          const subscriptionStatus = await fetchSubscriptionStatus(user.id);
-
-          if (subscriptionStatus === "active") {
-            router.push("/dashboard"); // User has subscription, go to dashboard
+          if (hasAdminConsoleAccess(user)) {
+            router.replace("/admin");
           } else {
-            router.push("/membership"); // User needs to select a subscription plan
+            const access = await fetchAccountAccess();
+            router.replace(getLoginDestination(user, access));
           }
         } catch (error) {
           console.error("Error checking subscription:", error);
-          router.push("/membership"); // Fallback to membership page
+          setFormError("Unable to check account access. Please try again.");
         }
         setLoginSuccess(false); // Reset flag
       }

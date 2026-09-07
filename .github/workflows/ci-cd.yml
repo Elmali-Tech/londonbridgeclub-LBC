@@ -33,6 +33,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Account access regression tests
+        run: npm test
+
   deploy:
     name: Deploy to Cloud Run
     if: github.event_name != 'pull_request'

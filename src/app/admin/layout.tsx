@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Sidebar from "@/app/components/admin/Sidebar";
+import { hasAdminConsoleAccess } from "@/lib/accountAccess";
 
 export default function AdminLayout({
   children,
@@ -12,11 +13,7 @@ export default function AdminLayout({
 }>) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
-  const hasAccess =
-    userRole === "admin" ||
-    userRole === "opportunity_manager" ||
-    userRole === "sales_member";
+  const hasAccess = !!user && hasAdminConsoleAccess(user);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
 
@@ -35,14 +32,13 @@ export default function AdminLayout({
 
   // Redirect users who don't have admin console access
   React.useEffect(() => {
-    if (!isLoading && !hasAccess && user) {
-      console.log("Admin console yetkisi yok, ana sayfaya yönlendiriliyor");
-      router.push("/");
+    if (!isLoading && !hasAccess) {
+      router.replace(user ? "/dashboard" : "/login");
     }
   }, [user, router, isLoading, hasAccess]);
 
   // Loading state or unauthorized access
-  if (isLoading || (user && !hasAccess)) {
+  if (isLoading || !hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import {
   SubscriptionStatus,
-  fetchSubscriptionStatus,
+  fetchAccountAccess,
 } from "@/lib/subscriptionUtils";
 import DashboardContainer from "@/app/components/dashboard/DashboardContainer";
 import { toast } from "react-hot-toast";
@@ -76,8 +76,8 @@ export default function MembersPage() {
       if (!user) return;
 
       try {
-        const status = await fetchSubscriptionStatus(user.id);
-        setSubscriptionStatus(status);
+        const access = await fetchAccountAccess();
+        setSubscriptionStatus(access.hasDashboardAccess ? "active" : "inactive");
       } catch (error) {
         console.error("Failed to fetch subscription status:", error);
         setSubscriptionStatus("inactive");

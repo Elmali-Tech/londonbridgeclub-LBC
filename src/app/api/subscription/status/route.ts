@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { hasDashboardAccess } from "@/lib/accountAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
       await Promise.all([
         supabase
           .from("users")
-          .select("subscription_status")
+          .select("subscription_status,stripe_customer_id")
           .eq("id", user.id)
           .single(),
         supabase
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         status: userStatus?.subscription_status === "active" ? "active" : "inactive",
+        hasDashboardAccess: hasDashboardAccess({ ...user, ...userStatus }, (subscriptions || []).length > 0),
         hasAnySubscription: (subscriptions || []).length > 0,
         subscription: activeSubscription,
       },

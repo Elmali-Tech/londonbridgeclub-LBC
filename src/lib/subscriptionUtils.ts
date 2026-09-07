@@ -2,6 +2,24 @@ import { User } from '@/types/database';
 
 export type SubscriptionStatus = 'active' | 'inactive' | 'loading';
 
+export async function fetchAccountAccess(): Promise<{
+  status: 'active' | 'inactive';
+  hasDashboardAccess: boolean;
+  hasAnySubscription: boolean;
+}> {
+  const response = await fetch('/api/subscription/status', {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  });
+  if (!response.ok) throw new Error('Unable to check account access. Please try again.');
+  const data = await response.json();
+  return {
+    status: data.status === 'active' ? 'active' : 'inactive',
+    hasDashboardAccess: data.hasDashboardAccess === true,
+    hasAnySubscription: data.hasAnySubscription === true,
+  };
+}
+
 /**
  * Kullanıcının abonelik durumunu Supabase'den alır
  * @param userId Kullanıcı ID'si

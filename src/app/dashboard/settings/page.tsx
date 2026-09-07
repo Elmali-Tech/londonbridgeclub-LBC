@@ -8,23 +8,21 @@ import ProfileTab from "./tabs/ProfileTab";
 import SecurityTab from "./tabs/SecurityTab";
 import NotificationsTab from "./tabs/NotificationsTab";
 import SubscriptionTab from "./tabs/SubscriptionTab";
+import { fetchAccountAccess } from "@/lib/subscriptionUtils";
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  // Abonelik aktif değilse otomatik olarak Subscription tab'ını aç
   const [activeTab, setActiveTab] = useState("profile");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [checkedSubscription, setCheckedSubscription] = useState(false);
 
   React.useEffect(() => {
-    if (user && !checkedSubscription) {
-      const isActive = user.subscription_status === "active";
-      if (!isActive) {
-        setActiveTab("subscription");
-      }
-      setCheckedSubscription(true);
-    }
-  }, [user, checkedSubscription]);
+    if (!user) return;
+    let cancelled = false;
+    void fetchAccountAccess().then((access) => {
+      if (!cancelled && !access.hasDashboardAccess) setActiveTab("subscription");
+    }).catch((error) => console.error("Unable to check account access:", error));
+    return () => { cancelled = true; };
+  }, [user]);
 
   // Settings tabs
   const settingsTabs = [

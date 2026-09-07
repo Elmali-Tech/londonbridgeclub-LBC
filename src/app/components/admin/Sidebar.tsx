@@ -1,5 +1,6 @@
 "use client";
 
+import { getEffectiveRole } from "@/lib/accountAccess";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -406,7 +407,7 @@ export default function Sidebar({ isCollapsed = false, toggleCollapse }: Sidebar
     }
   ];
 
-  const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
+  const userRole = getEffectiveRole(user);
 
   const filteredNavigation = navigation
     .map((group) => ({

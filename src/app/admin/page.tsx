@@ -1,5 +1,6 @@
 "use client";
 
+import { getEffectiveRole } from "@/lib/accountAccess";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -134,7 +135,7 @@ export default function AdminDashboardPage() {
     kpiAchievementRate: 0,
   });
 
-  const userRole = user?.role || (user?.is_admin ? "admin" : "viewer");
+  const userRole = getEffectiveRole(user);
   const hasAccess = userRole === "admin" || userRole === "opportunity_manager";
 
   useEffect(() => {
